@@ -1921,6 +1921,8 @@ function rp() {
     nl = 'Packages › Create Package Studio';
   } else if (S.p === 'package_view') {
     nl = 'Packages › Package Details & Deep Inspection';
+  } else if (S.p === 'test_builder') {
+    nl = 'Tests › Test Builder';
   } else {
     for (const item of (NV[me().role] || [])) {
       if (item[0] === S.p) { nl = item[1]; break; }
@@ -3783,7 +3785,7 @@ const PG = {
         r === 'student'
           ? 'Timed computer-based tests matching national exam guidelines with live question palette, marking scheme and instant analytics.'
           : 'Author mock exams, configure negative marking, multi-subject sections and evaluate student submissions.',
-        r === 'student' ? '' : '<button class="b1" onclick="et()">+ Create Test</button>'
+        r === 'student' ? '' : '<button class="b1" onclick="typeof openTestBuilderInNewTab === \'function\' ? openTestBuilderInNewTab() : et()">+ Create Test</button>'
       ) +
       `<div class="metric-grid">
         ${renderKpiCard({ title: 'Available CBT Tests', value: l.length, trend: '↑ Live', sub: 'ready for exam', icon: 'tests', variant: 0 })}
