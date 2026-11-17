@@ -803,7 +803,7 @@
       hd(
         'Packages',
         'Bundled learning packages featuring batches, linked courses, video/test series, lectures, and learner assignments.',
-        adm ? '<button class="b1" onclick="openPackageWizard()">+ Create Package</button>' : ''
+        adm ? '<button class="b1" onclick="initNewPackageCreator()">+ Create Package</button>' : ''
       ) +
       `<div class="metric-grid">
         ${renderKpiCard({ title: 'Total Packages', value: pkgs.length, trend: '↑ +10%', sub: 'vs. last month', icon: 'packages', variant: 0 })}
@@ -820,7 +820,7 @@
               const liveThumb = getLivePackageImg(pkg);
 
               return `
-                <div class="cd cc pkg-card" style="display:flex;flex-direction:column;justify-content:space-between">
+                <div class="cd cc pkg-card" style="display:flex;flex-direction:column;justify-content:space-between;cursor:pointer" onclick="openPackageInNewTab('${pkg.id}')">
                   <div>
                     <div class="cimw pkg-thumb" style="height:170px;position:relative">
                       <img class="cim pkg-thumb-img" src="${liveThumb}" alt="${E(pkg.name)}" loading="lazy">
@@ -857,7 +857,7 @@
                       <span class="st gn">Active</span>
                     </div>
                     <div class="ac" style="gap:6px;align-items:center">
-                      <button class="b1" style="flex:1" onclick="viewPackageDetail('${pkg.id}')">View Details</button>
+                      <button class="b1" style="flex:1" onclick="event.stopPropagation(); openPackageInNewTab('${pkg.id}')">Open Package (New Tab) ↗</button>
                       ${adm ? tblDots('package', pkg.id) : ''}
                     </div>
                   </div>
@@ -867,7 +867,7 @@
           </div>`
         : `<div class="em">
             <p>${r === 'student' ? 'No packages assigned to your account yet.' : 'No packages created yet. Create a package to bundle batches, courses, and tests.'}</p>
-            ${adm ? '<button class="b1" style="margin-top:10px" onclick="openPackageWizard()">+ Create Package</button>' : ''}
+            ${adm ? '<button class="b1" style="margin-top:10px" onclick="initNewPackageCreator()">+ Create Package</button>' : ''}
           </div>`)
     );
   };

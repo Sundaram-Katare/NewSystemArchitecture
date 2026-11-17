@@ -1030,7 +1030,8 @@ const IC = {
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
   dots: '<circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/>',
   edit: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>',
-  delete: '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>'
+  delete: '<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>',
+  social_studio: '<rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>'
 };
 const ico = (k, sz = 15) => `<svg width="${sz}" height="${sz}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:${sz}px;height:${sz}px;flex-shrink:0;vertical-align:middle;display:inline-block">${IC[k] || IC.dash}</svg>`;
 
@@ -1136,9 +1137,10 @@ function getTableRowActions(type, id) {
     const p = (D.packages || []).find(x => x.id === id);
     if (!p) return [];
     return [
-      { label: 'View Package Details', icon: 'dash', action: () => viewPackageDetail(id) },
+      { label: 'Open in New Tab (Deep Data) ↗', icon: 'dash', action: () => (typeof openPackageInNewTab === 'function' ? openPackageInNewTab(id) : window.open('basic.html?p=package_view&pkg=' + id, '_blank')) },
+      { label: 'View Package Details', icon: 'dash', action: () => (typeof openPackageInNewTab === 'function' ? openPackageInNewTab(id) : viewPackageDetail(id)) },
       { label: 'Assign Students (Select / CSV)', icon: 'students', action: () => openAssignStudentsModal(id) },
-      { label: 'Edit Package', icon: 'edit', action: () => openPackageWizard(id) },
+      { label: 'Edit in Package Studio', icon: 'edit', action: () => (typeof editPackageInCreator === 'function' ? editPackageInCreator(id) : openPackageWizard(id)) },
       { label: p.status === 'Draft' ? 'Publish Package' : 'Unpublish Package', icon: 'swap', action: () => togglePackageStatus(id) },
       { label: 'Delete Package', icon: 'delete', danger: true, action: () => deletePackage(id) }
     ];
@@ -1450,6 +1452,7 @@ const NV = {
       ['shopping_tokens', 'Tokens'],
       ['shopping_coupons', 'Coupons']
     ]],
+    ['social_studio', 'Social Studio'],
     ['messages', 'Messages'],
     ['__divider'],
     ['__section', 'FINANCE'],
@@ -1478,6 +1481,7 @@ const NV = {
       ['shopping_tokens', 'Tokens'],
       ['shopping_coupons', 'Coupons']
     ]],
+    ['social_studio', 'Social Studio'],
     ['messages', 'Messages'],
     ['__divider'],
     ['__section', 'FINANCE'],
@@ -1878,7 +1882,8 @@ function li() {
   go2(u.id);
 }
 function go2(i) {
-  S = { uid: i, c: 'all', p: 'dash', q: '', pg: 0, chartPeriod: 'monthly' };
+  try { localStorage.setItem('trigr_active_uid', i); } catch (e) {}
+  S = { uid: i, c: 'all', p: S.p || 'dash', selectedPkgId: S.selectedPkgId || null, q: '', pg: 0, chartPeriod: 'monthly' };
   render();
 }
 function fp() {
@@ -1904,6 +1909,7 @@ const go = p => {
   lo = () =>
     cfm('Log out of this session?', () => {
       S.uid = null;
+      try { localStorage.removeItem('trigr_active_uid'); } catch (e) {}
       closeM(1);
       login();
     });
@@ -1911,11 +1917,17 @@ const go = p => {
 function rp() {
   const p = $('#pg');
   let nl = '';
-  for (const item of (NV[me().role] || [])) {
-    if (item[0] === S.p) { nl = item[1]; break; }
-    if (item[2]) {
-      const sub = item[2].find(s => s[0] === S.p);
-      if (sub) { nl = `${item[1]} › ${sub[1]}`; break; }
+  if (S.p === 'create_package') {
+    nl = 'Packages › Create Package Studio';
+  } else if (S.p === 'package_view') {
+    nl = 'Packages › Package Details & Deep Inspection';
+  } else {
+    for (const item of (NV[me().role] || [])) {
+      if (item[0] === S.p) { nl = item[1]; break; }
+      if (item[2]) {
+        const sub = item[2].find(s => s[0] === S.p);
+        if (sub) { nl = `${item[1]} › ${sub[1]}`; break; }
+      }
     }
   }
   p.innerHTML = `<div class=bc>Workspace › <span>${nl || S.p}</span></div>` + (PG[S.p] ? PG[S.p]() : '<div class=em>Page not found</div>');
@@ -1935,7 +1947,26 @@ function toggleNavGroup(k) {
 }
 
 function render() {
+  if (!S.uid) {
+    try {
+      const uParams = new URLSearchParams(window.location.search);
+      const urlPkg = uParams.get('pkg');
+      const urlP = uParams.get('p');
+      const roleKey = localStorage.getItem('trigrexam_active_role');
+      const savedUid = localStorage.getItem('trigr_active_uid') || (roleKey && DM[roleKey]);
+      if (urlPkg || urlP || savedUid) {
+        S.uid = (savedUid && D.users.some(x => x.id === savedUid)) ? savedUid : 'u1';
+        if (urlPkg) {
+          S.p = 'package_view';
+          S.selectedPkgId = urlPkg;
+        } else if (urlP) {
+          S.p = urlP;
+        }
+      }
+    } catch (e) {}
+  }
   if (!S.uid) return login();
+  try { localStorage.setItem('trigr_active_uid', S.uid); } catch (e) {}
   if (authAnimFrame) { cancelAnimationFrame(authAnimFrame); authAnimFrame = null; }
   if (authInterval) { clearInterval(authInterval); authInterval = null; }
   if (!hasC()) S.c = 'all';
@@ -1986,13 +2017,29 @@ function render() {
     }
 
     const unreadMsgs = (k === 'messages' && r === 'student') ? (D.messages || []).filter(m => m.toStudentId === S.uid && !m.read).length : 0;
-    return `
+    const baseNav = `
       <a tabindex=0 title="${l}" class="${S.p === k ? 'on' : ''}" onclick="go('${k}')">
         ${ico(k)}
         <span class=lbl>${l}</span>
         ${unreadMsgs ? `<span class="pill-badge pill-red" style="margin-left:auto;font-size:10.5px;padding:2px 7px;font-weight:700">${unreadMsgs}</span>` : ''}
       </a>
     `;
+
+    if (k === 'dash' && r !== 'student') {
+      return baseNav + `
+        <div class="sidebar-create-pkg-wrap">
+          <button type="button" class="btn-sidebar-create-pkg ${S.p === 'create_package' ? 'on' : ''}" onclick="typeof initNewPackageCreator === 'function' ? initNewPackageCreator() : go('create_package')" title="Create New Package">
+            <svg class="pkg-btn-ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span class="lbl">Create Package</span>
+            <span class="btn-tag">New</span>
+          </button>
+        </div>
+      `;
+    }
+    return baseNav;
   }).join('');
 
   $('#app').innerHTML = `<aside class=sb><div class=lg>${LIMG}</div><div class=prof><img src="${av(u)}" alt=""><div><b>${E(u.name)}</b><small><i class=dot></i>Online · ${RL[r]}</small></div></div><nav style="padding-top:10px">${navHtml}</nav><div class=swr><div class=pop id=sw hidden><div class=pom><small>Institute mode</small><div class=seg>${['Online', 'Offline', 'Both'].map(m => `<button type=button class="${OM() === m ? 'on' : ''}" onclick="som('${m}')">${m}</button>`).join('')}</div></div>${[['u1', 'Institute Owner'], ['u2', 'Administrator'], ['u3', 'Instructor'], ['s1', 'Student']].map(([i, l]) => `<button class="${S.uid === i ? 'on' : ''}" onclick="sw('${i}')"><img src="${av(U(i))}" alt=""><span><b>${l}</b><small>${E(U(i).name)}</small></span></button>`).join('')}</div><button class="b2 swb" title="Switch demo role" onclick="$('#sw').hidden=!$('#sw').hidden">${ico('swap')}<span class=lbl>Switch role<em>Demo</em></span></button></div></aside><main><header class=top><div class=tl><button class=hb aria-label="Toggle sidebar" onclick="document.body.classList.toggle('mini')">${ico('menu')}</button>${hasC() && r !== 'student' && (r === 'owner' || c.length > 1) ? `<select aria-label="Center" onchange="S.c=this.value;S.pg=0;render()"><option value=all>${r === 'owner' ? 'All centers' : 'All my centers'}</option>${c.map(x => `<option value=${x.id} ${S.c === x.id ? 'selected' : ''}>${E(x.name)}</option>`).join('')}</select>` : ''}</div><div class=hr>${r !== 'student' ? `<button class=lv onclick="toast('Opening proctor live dashboard (simulated)')"><i></i>Proctor Live</button>` : ''}<button class=thb title="${THEME === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}" onclick="toggleTheme(event)">${ico(THEME === 'dark' ? 'sun' : 'moon')}</button><button class=ib aria-label=Messages title="Direct Student Messages" onclick="go('messages')">${ico('messages')}${studentUnreadMsgs ? `<i class=nb>${studentUnreadMsgs}</i>` : ''}</button><button class=ib aria-label=Notifications onclick=nt()>${ico('bell')}${n ? `<i class=nb>${n}</i>` : ''}</button><button class=uc title="Log out" onclick=lo()><img src="${av(u)}" alt=""><span>${E(u.name)}</span></button></div></header><section id=pg></section></main>`;
@@ -2516,7 +2563,7 @@ const PG = {
         <div class="dash-actions">
           <button class="b2" onclick="go('team')">${ico('team')} Manage Team</button>
           <button class="b2" onclick="ci()">${ico('up')} Import CSV</button>
-          <button class="b2" onclick="openPackageWizard()">+ Create Package</button>
+          <button class="b2" onclick="typeof initNewPackageCreator === 'function' ? initNewPackageCreator() : go('create_package')">+ Create Package</button>
           <button class="b1" onclick="es()">+ Add Student</button>
         </div>
       </div>
@@ -2531,9 +2578,9 @@ const PG = {
           <div class="qa-top"><div class="qa-ico">${ico('up')}</div><div class="qa-arrow">↗</div></div>
           <div><b>Bulk CSV Import</b><small>Import up to 500 learners</small></div>
         </div>
-        <div class="qa-card qa-pink" onclick="et()">
-          <div class="qa-top"><div class="qa-ico">${ico('tests')}</div><div class="qa-arrow">↗</div></div>
-          <div><b>Schedule New Test</b><small>Create quiz with timer</small></div>
+        <div class="qa-card qa-pink" onclick="typeof initNewPackageCreator === 'function' ? initNewPackageCreator() : go('create_package')">
+          <div class="qa-top"><div class="qa-ico">${ico('packages')}</div><div class="qa-arrow">↗</div></div>
+          <div><b>Create Package</b><small>Bundle courses, tests & notes</small></div>
         </div>
       </div>
 
@@ -2542,7 +2589,7 @@ const PG = {
         ${renderKpiCard({ title: 'Total Students', value: al.length, trend: '↑ +12%', sub: 'vs. last month', icon: 'students', link: 'students', variant: 0 })}
         ${renderKpiCard({ title: 'Online Learners', value: al.filter(s => s.mode === 'Online').length || al.length, trend: '↑ +15%', sub: 'vs. last month', icon: 'file', link: 'students', variant: 1 })}
         ${renderKpiCard({ title: 'Active Enrollees', value: al.filter(s => s.courses.length > 0).length, trend: '↑ +8%', sub: 'vs. last month', icon: 'courses', link: 'students', variant: 2 })}
-        ${renderKpiCard({ title: 'Without Batch', value: al.filter(s => !s.batch).length, trend: '↑ +2', sub: 'vs. last month', icon: 'batches', link: 'students', variant: 3 })}
+        ${renderKpiCard({ title: 'Packages Created', value: (D.packages || []).length, trend: '↑ Live', sub: 'active bundles', icon: 'packages', link: 'packages', variant: 3 })}
       </div>
 
       <!-- Main Analytics Row 1: Tests Created (Area Graph) & Live Classes (Histogram) -->
@@ -3686,7 +3733,7 @@ const PG = {
       hd(
         'Package & Test Series Management',
         'Author test bundles, set pricing, assign promotional coupon codes and publish test series packages.',
-        `<button class="b2" onclick="openCouponModal()">+ New Coupon</button> <button class="b1" onclick="openPackageWizard()">+ Create Package</button>`
+        `<button class="b2" onclick="openCouponModal()">+ New Coupon</button> <button class="b1" onclick="typeof initNewPackageCreator === 'function' ? initNewPackageCreator() : openPackageWizard()">+ Create Package</button>`
       ) +
       `<div class="metric-grid">
         ${renderKpiCard({ title: 'Published Packages', value: pkgsList.length, trend: '↑ Live', sub: 'in online store', icon: 'packages', variant: 0 })}
@@ -3699,7 +3746,7 @@ const PG = {
           [
             'Package Name',
             p => `
-              <b>${E(p.name)}</b>
+              <b style="cursor:pointer;color:var(--p)" onclick="typeof openPackageInNewTab === 'function' && openPackageInNewTab('${p.id}')">${E(p.name)} ↗</b>
               <br><small style="color:var(--mute)">Target: ${p.category} · Rating: ${p.rating}</small>
             `
           ],

@@ -487,28 +487,32 @@ function drev(cid, rid) {
 }
 
 /* ---------- Test builder (course-wise or subject-wise, many questions) ---------- */
-function et(i, cid, sid) {
+function et(i, cid, sid, defaultScope) {
   const t = i ? D.tests.find(x => x.id === i) : null, cc = crs();
+  const initScope = defaultScope || (cid === '__package__' ? 'Package' : (sid ? 'Subject' : 'Course'));
   TB = {
     id: i || '',
     d: t
-      ? { name: t.name, course: t.course, scope: t.scope || (t.course === '__institute__' ? 'Institute' : (t.sub ? 'Subject' : 'Course')), sub: t.sub || '', min: t.min, qs: t.qs.map(q => ({ q: q.q, o: [...q.o, '', '', '', ''].slice(0, 4), a: q.a })) }
-      : { name: '', course: cid || (cc[0] || {}).id || '', scope: sid ? 'Subject' : 'Course', sub: sid || '', min: 15, qs: [{ q: '', o: ['', '', '', ''], a: 0 }] }
+      ? { name: t.name, course: t.course, scope: t.scope || (t.course === '__institute__' ? 'Institute' : t.course === '__package__' ? 'Package' : (t.sub ? 'Subject' : 'Course')), sub: t.sub || '', min: t.min, qs: t.qs.map(q => ({ q: q.q, o: [...q.o, '', '', '', ''].slice(0, 4), a: q.a })) }
+      : { name: '', course: (cid && cid !== '__package__') ? cid : ((cc[0] || {}).id || ''), scope: initScope, sub: sid || '', min: 15, qs: [{ q: '', o: ['', '', '', ''], a: 0 }] }
   };
-  if (!TB.d.course && TB.d.scope !== 'Institute') return toast('Create a course first');
+  if (!TB.d.course && TB.d.scope !== 'Institute' && TB.d.scope !== 'Package') return toast('Create a course first');
   etr();
 }
 function etr() {
   const d = TB.d, sc = ($('.mb') || {}).scrollTop || 0, c = D.courses.find(x => x.id === d.course), subs = c ? ensure(c).subs : [];
   if (d.scope === 'Subject' && !subs.some(s => s.id === d.sub)) d.sub = (subs[0] || {}).id || '';
   const cl2 = D.courses.filter(x => crs().some(y => y.id === x.id) || x.id === d.course);
+  const pkgLabel = (window.PKG_FORM && window.PKG_FORM.name) ? window.PKG_FORM.name : 'Current Package';
   const b = `<div class=g2><label>Test name *<input value="${E(d.name)}" oninput="TB.d.name=this.value" placeholder="e.g. Weekly Physics Test"></label><label>Duration (minutes)<input type=number min=1 value="${E(d.min)}" oninput="TB.d.min=this.value"></label></div>
     <div class=g2>
       ${d.scope === 'Institute'
         ? `<label>Scope Coverage<input value="All Institute Courses (Universal CBT Assessment)" disabled style="background:var(--s);color:var(--mute)"></label>`
+        : d.scope === 'Package'
+        ? `<label>Scope Coverage<input value="Package-Level Assessment (${E(pkgLabel)})" disabled style="background:var(--s);color:var(--mute)"></label>`
         : `<label>Course *<select onchange="TB.d.course=this.value;TB.d.sub='';etr()">${cl2.map(x => `<option value="${x.id}" ${x.id === d.course ? 'selected' : ''}>${E(x.name)}</option>`).join('')}</select></label>`
       }
-      <div class=fg><span>Test scope</span><div class=seg><button type=button class="${d.scope === 'Course' ? 'on' : ''}" onclick="TB.d.scope='Course';etr()">Course-wise</button><button type=button class="${d.scope === 'Subject' ? 'on' : ''}" onclick="TB.d.scope='Subject';etr()">Subject-wise</button><button type=button class="${d.scope === 'Institute' ? 'on' : ''}" onclick="TB.d.scope='Institute';etr()">Institute-level</button></div></div>
+      <div class=fg><span>Test scope</span><div class=seg><button type=button class="${d.scope === 'Package' ? 'on' : ''}" onclick="TB.d.scope='Package';etr()">Package-level</button><button type=button class="${d.scope === 'Course' ? 'on' : ''}" onclick="TB.d.scope='Course';etr()">Course-wise</button><button type=button class="${d.scope === 'Subject' ? 'on' : ''}" onclick="TB.d.scope='Subject';etr()">Subject-wise</button><button type=button class="${d.scope === 'Institute' ? 'on' : ''}" onclick="TB.d.scope='Institute';etr()">Institute-level</button></div></div>
     </div>
     ${d.scope === 'Subject' ? `<label>Subject *<select onchange="TB.d.sub=this.value">${subs.map(s => `<option value="${s.id}" ${s.id === d.sub ? 'selected' : ''}>${E(s.name)}</option>`).join('')}</select></label>` : ''}
     <div class=qlist>${d.qs.map((q, j) => `<div class=qb><div class=qh><b>Question ${j + 1}</b><button type=button class="b2 xs" ${d.qs.length < 2 ? 'disabled' : ''} onclick="TB.d.qs.splice(${j},1);etr()">×</button></div>
@@ -516,7 +520,7 @@ function etr() {
       ${q.o.map((o, k) => `<label class="ck opt"><input type=radio name="ca${j}" ${q.a === k ? 'checked' : ''} onchange="TB.d.qs[${j}].a=${k}" title="Correct answer"><input value="${E(o)}" placeholder="Option ${'ABCD'[k]}" oninput="TB.d.qs[${j}].o[${k}]=this.value"></label>`).join('')}</div>`).join('')}</div>
     <button type=button class=b2 style="justify-self:start" onclick="TB.d.qs.push({q:'',o:['','','',''],a:0});etr()">+ Add question</button><small>Select the radio next to the correct option.</small>`;
   modal(TB.id ? 'Edit test' : 'Create test', b, null, '', '', `<button class=b2 onclick=closeM(1)>Cancel</button><button class=b1 onclick=etSave()>${TB.id ? 'Save test' : 'Publish test'}</button>`);
-  $('.md').style.maxWidth = '720px';
+  $('.md').style.maxWidth = '740px';
   $('.mb').scrollTop = sc;
 }
 function etSave() {
@@ -536,8 +540,8 @@ function etSave() {
   if (!qs.length) return er('Add at least one question.');
   const rec = {
     name: d.name.trim(),
-    course: d.scope === 'Institute' ? '__institute__' : d.course,
-    courseLabel: d.scope === 'Institute' ? 'Institute Level' : ((D.courses.find(x => x.id === d.course) || {}).name || 'All'),
+    course: d.scope === 'Institute' ? '__institute__' : d.scope === 'Package' ? '__package__' : d.course,
+    courseLabel: d.scope === 'Institute' ? 'Institute Level' : d.scope === 'Package' ? 'Package Level' : ((D.courses.find(x => x.id === d.course) || {}).name || 'All'),
     scope: d.scope,
     sub: d.scope === 'Subject' ? d.sub : '',
     min: +d.min || 10,
@@ -548,7 +552,7 @@ function etSave() {
     D.tests.push({ id: id('t'), ...rec });
     if (d.scope === 'Institute') {
       D.users.filter(s => s.role === 'student').forEach(s => note(s.id, `New institute-level test: ${rec.name}`));
-    } else {
+    } else if (d.scope !== 'Package') {
       D.users.filter(s => s.role === 'student' && s.courses.includes(d.course)).forEach(s => note(s.id, `New test: ${rec.name}`));
     }
   }
@@ -1038,12 +1042,13 @@ PG.testseries = function () {
   );
 };
 
-function openCreateTestSeriesModal() {
+function openCreateTestSeriesModal(defaultScope) {
   const cc = crs().map(c => [c.id, c.name]);
-  let selectedScope = 'Institute';
+  let selectedScope = defaultScope || 'Institute';
 
   const renderModalContent = () => {
     const isInst = selectedScope === 'Institute';
+    const isPkg = selectedScope === 'Package';
     return `
       <div style="display:grid;gap:12px">
         <label>Series Title *
@@ -1053,12 +1058,17 @@ function openCreateTestSeriesModal() {
         <div class="fg">
           <span style="font-size:12.5px;font-weight:600;color:var(--ink);display:block;margin-bottom:6px">Scope Assignment *</span>
           <div class="seg" style="display:flex;gap:4px">
+            <button type="button" class="${isPkg ? 'on' : ''}" onclick="window.__tsScopeSelect('Package')">Package-level</button>
             <button type="button" class="${isInst ? 'on' : ''}" onclick="window.__tsScopeSelect('Institute')">Institute-level (Independent)</button>
-            <button type="button" class="${!isInst ? 'on' : ''}" onclick="window.__tsScopeSelect('Course')">Course-wise</button>
+            <button type="button" class="${(!isInst && !isPkg) ? 'on' : ''}" onclick="window.__tsScopeSelect('Course')">Course-wise</button>
           </div>
         </div>
 
-        ${isInst ? `
+        ${isPkg ? `
+          <div style="background:var(--s);border:1px solid var(--b);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mute)">
+            <b>Package-Level Series:</b> This test series is created specifically for this package without requiring a separate course.
+          </div>
+        ` : isInst ? `
           <div style="background:var(--s);border:1px solid var(--b);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mute)">
             <b>Independent Series:</b> This test series is open across the entire institute and will not be restricted to any single course.
           </div>
@@ -1097,7 +1107,19 @@ function openCreateTestSeriesModal() {
       const desc = ($('#tsDesc') ? $('#tsDesc').value : '').trim();
       if (!title) return 'Series title is required.';
 
-      if (selectedScope === 'Institute') {
+      if (selectedScope === 'Package') {
+        D.pkgTestSeries = D.pkgTestSeries || [];
+        D.pkgTestSeries.unshift({
+          id: id('ts_pkg_'),
+          title,
+          desc,
+          scope: 'Package',
+          courseId: '__package__',
+          tests: [],
+          status: 'Active',
+          createdAt: dayS()
+        });
+      } else if (selectedScope === 'Institute') {
         D.instTestSeries = D.instTestSeries || [];
         D.instTestSeries.unshift({
           id: id('ts_inst_'),
@@ -2063,7 +2085,7 @@ PG.packages = function () {
     hd(
       'Packages',
       'Bundled learning packages featuring batches, linked courses, video/test series, lectures, and learner assignments.',
-      adm ? '<button class="b1" onclick="openPackageWizard()">+ Create Package</button>' : ''
+      adm ? '<button class="b1" onclick="initNewPackageCreator()">+ Create Package</button>' : ''
     ) +
     `<div class="metric-grid">
       ${renderKpiCard({ title: 'Total Packages', value: pkgs.length, trend: '↑ +10%', sub: 'vs. last month', icon: 'packages', variant: 0 })}
@@ -2078,7 +2100,7 @@ PG.packages = function () {
             const enrolledCount = (pkg.students || []).length;
             const courseObjs = D.courses.filter(c => (pkg.courses || []).includes(c.id));
             return `
-              <div class="cd cc pkg-card" style="display:flex;flex-direction:column;justify-content:space-between">
+              <div class="cd cc pkg-card" style="display:flex;flex-direction:column;justify-content:space-between;cursor:pointer" onclick="openPackageInNewTab('${pkg.id}')">
                 <div>
                   <div class="cimw" style="height:160px;position:relative">
                     <img class="cim" src="${pkg.thumb || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=80'}" alt="${E(pkg.name)}" loading="lazy">
@@ -2114,7 +2136,7 @@ PG.packages = function () {
                     <span class="st gn">Active</span>
                   </div>
                   <div class="ac" style="gap:6px;align-items:center">
-                    <button class="b1" style="flex:1" onclick="viewPackageDetail('${pkg.id}')">View Details</button>
+                    <button class="b1" style="flex:1" onclick="event.stopPropagation(); openPackageInNewTab('${pkg.id}')">Open Package (New Tab) ↗</button>
                     ${adm ? tblDots('package', pkg.id) : ''}
                   </div>
                 </div>
@@ -2124,7 +2146,7 @@ PG.packages = function () {
         </div>`
       : `<div class="em">
           <p>${r === 'student' ? 'No packages assigned to your account yet.' : 'No packages created yet. Create a package to bundle batches, courses, and tests.'}</p>
-          ${adm ? '<button class="b1" style="margin-top:10px" onclick="openPackageWizard()">+ Create Package</button>' : ''}
+          ${adm ? '<button class="b1" style="margin-top:10px" onclick="initNewPackageCreator()">+ Create Package</button>' : ''}
         </div>`)
   );
 };
@@ -2674,3 +2696,2524 @@ function handlePkgCsvUpload(input) {
   };
   reader.readAsText(file);
 }
+
+/* =====================================================================
+   UNIFIED ALL-IN-ONE PACKAGE CREATOR STUDIO & DEEP NESTED PACKAGE VIEW
+   ===================================================================== */
+
+function openPackageInNewTab(pkgId) {
+  if (!pkgId) return;
+  try {
+    if (S && S.uid) localStorage.setItem('trigr_active_uid', S.uid);
+  } catch (e) {}
+  const pathname = window.location.pathname || 'basic.html';
+  const targetUrl = `${pathname}?p=package_view&pkg=${encodeURIComponent(pkgId)}`;
+  const win = window.open(targetUrl, '_blank');
+  if (!win) {
+    S.selectedPkgId = pkgId;
+    go('package_view');
+  }
+}
+
+function resetPkgForm(existingPkg = null) {
+  if (existingPkg) {
+    return {
+      isEdit: true,
+      id: existingPkg.id,
+      name: existingPkg.name || '',
+      access: existingPkg.access || 'Paid',
+      price: existingPkg.price !== undefined ? existingPkg.price : 4999,
+      desc: existingPkg.desc || existingPkg.description || '',
+      thumb: existingPkg.thumb || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop&q=80',
+      batch: existingPkg.batch || '',
+      category: existingPkg.category || 'Engineering (JEE)',
+      validity: existingPkg.validity || '365 Days (1 Year)',
+      advOpen: false,
+      studentToggle: (existingPkg.students && existingPkg.students.length > 0) || false,
+      courses: existingPkg.courses ? [...existingPkg.courses] : [],
+      testSeries: existingPkg.testSeries ? [...existingPkg.testSeries] : [],
+      videoSeries: existingPkg.videoSeries ? [...existingPkg.videoSeries] : [],
+      tests: existingPkg.tests ? [...existingPkg.tests] : [],
+      lectures: existingPkg.lectures ? [...existingPkg.lectures] : [],
+      notes: existingPkg.notes ? [...existingPkg.notes] : [],
+      students: existingPkg.students ? [...existingPkg.students] : []
+    };
+  }
+  return {
+    isEdit: false,
+    id: id('pkg'),
+    name: '',
+    access: 'Paid',
+    price: 4999,
+    desc: '',
+    thumb: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop&q=80',
+    batch: '',
+    category: 'Engineering (JEE)',
+    validity: '365 Days (1 Year)',
+    advOpen: false,
+    studentToggle: false,
+    courses: D.courses && D.courses[0] ? [D.courses[0].id] : [],
+    testSeries: [],
+    videoSeries: [],
+    tests: [],
+    lectures: [],
+    notes: [],
+    students: []
+  };
+}
+
+window.PKG_DRAWER = {
+  open: false,
+  type: null,
+  filter: 'All',
+  search: ''
+};
+
+window.__pkgCreateHook = null;
+
+function initNewPackageCreator() {
+  window.PKG_FORM = resetPkgForm(null);
+  window.PKG_DRAWER = { open: false, type: null, filter: 'All', search: '' };
+  go('create_package');
+}
+
+function editPackageInCreator(pkgId) {
+  const pkg = (D.packages || []).find(p => p.id === pkgId);
+  if (!pkg) return;
+  window.PKG_FORM = resetPkgForm(pkg);
+  window.PKG_DRAWER = { open: false, type: null, filter: 'All', search: '' };
+  go('create_package');
+}
+
+function handlePkgStudioThumbUpload(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    window.PKG_FORM.thumb = e.target.result;
+    if ($('#cp_thumb_preview')) $('#cp_thumb_preview').src = e.target.result;
+    document.querySelectorAll('.ghl-preset-thumb').forEach(el => el.classList.remove('selected'));
+    toast('Custom cover image uploaded');
+  };
+  r.readAsDataURL(file);
+}
+
+function selectGhlPreset(url) {
+  window.PKG_FORM.thumb = url;
+  if ($('#cp_thumb_preview')) $('#cp_thumb_preview').src = url;
+  document.querySelectorAll('.ghl-preset-thumb').forEach(el => {
+    el.classList.toggle('selected', el.getAttribute('data-url') === url);
+  });
+}
+
+/* Gather Catalog Data for the Create Package Builder & Right Sidebar Drawer */
+function getPkgBuilderCatalog() {
+  const allCourses = (D.courses || []).map(ensure);
+  const allTests = D.tests || [];
+  const allStudents = (D.users || []).filter(u => u.role === 'student');
+
+  // 1. Courses
+  const courses = allCourses.map(c => ({
+    id: c.id,
+    title: c.name,
+    meta: `${c.code || 'CRS'} · ${(c.subs || []).length} Subjects · ${(c.lessons || []).length} Lectures`,
+    category: c.mode || 'Online',
+    raw: c
+  }));
+
+  // 2. Test Series
+  const tsMap = new Map();
+  (getAllTestSeries ? getAllTestSeries() : []).forEach(ts => {
+    tsMap.set(ts.title, {
+      id: ts.title,
+      title: ts.title,
+      meta: `${(ts.tests || []).length} Tests Linked · ${ts.isInstitute ? 'Institute Level' : ts.courseName}`,
+      category: ts.isInstitute ? 'Independent' : (ts.courseName || 'Course Series'),
+      raw: ts
+    });
+  });
+  (D.pkgTestSeries || []).forEach(ts => {
+    if (!tsMap.has(ts.title)) {
+      tsMap.set(ts.title, {
+        id: ts.title,
+        title: ts.title,
+        meta: `${(ts.tests || []).length} Tests Linked · Package Level`,
+        category: 'Package Level',
+        raw: ts
+      });
+    }
+  });
+  (D.testSeries || []).forEach(ts => {
+    if (!tsMap.has(ts.title)) {
+      tsMap.set(ts.title, {
+        id: ts.title,
+        title: ts.title,
+        meta: `${(ts.tests || []).length} Tests Linked · ${ts.cat || 'Standard'}`,
+        category: ts.cat || 'Engineering',
+        raw: ts
+      });
+    }
+  });
+  const series = Array.from(tsMap.values());
+
+  // 3. Video Series
+  const vsMap = new Map();
+  (D.pkgVideoSeries || []).forEach(vs => {
+    if (!vsMap.has(vs.title)) {
+      vsMap.set(vs.title, {
+        id: vs.title,
+        title: vs.title,
+        meta: `${(vs.videos || []).length} Videos · Package Level`,
+        category: 'Package Level',
+        raw: vs
+      });
+    }
+  });
+  allCourses.forEach(c => {
+    (c.videoSeries || []).forEach(vs => {
+      if (!vsMap.has(vs.title)) {
+        vsMap.set(vs.title, {
+          id: vs.title,
+          title: vs.title,
+          meta: `${(vs.videos || []).length} Videos · ${c.name}`,
+          category: c.name,
+          raw: vs
+        });
+      }
+    });
+  });
+  const vseries = Array.from(vsMap.values());
+
+  // 4. Individual CBT Tests
+  const tests = allTests.map(t => {
+    const cObj = allCourses.find(c => c.id === t.course);
+    const cat = t.course === '__institute__' ? 'Institute Level' : t.course === '__package__' ? 'Package Level' : (cObj ? cObj.name : (t.sub || 'General'));
+    return {
+      id: t.name,
+      title: t.name,
+      meta: `${t.min || 30} mins · ${(t.qs || []).length} Questions`,
+      category: cat,
+      raw: t
+    };
+  });
+
+  // 5. Standalone Video Lectures
+  const lecMap = new Map();
+  allCourses.forEach(c => {
+    (c.subs || []).forEach(s => {
+      (s.lessons || []).forEach(l => {
+        if (!lecMap.has(l.title)) {
+          lecMap.set(l.title, {
+            id: l.title,
+            title: l.title,
+            meta: `${l.dur || '18:00'} · ${s.name}`,
+            category: s.name || c.name,
+            raw: l
+          });
+        }
+      });
+    });
+  });
+  const lectures = Array.from(lecMap.values());
+
+  // 6. Study Notes & PDFs
+  const noteMap = new Map();
+  allCourses.forEach(c => {
+    (c.subs || []).forEach(s => {
+      (s.notes || []).forEach(n => {
+        if (!noteMap.has(n.title)) {
+          noteMap.set(n.title, {
+            id: n.title,
+            title: n.title,
+            meta: `${n.type || 'PDF'} · ${n.size || '1.4 MB'}`,
+            category: s.name || n.type || 'PDF',
+            raw: n
+          });
+        }
+      });
+    });
+  });
+  // Also include default/custom notes already in PKG_FORM
+  if (window.PKG_FORM && Array.isArray(window.PKG_FORM.notes)) {
+    window.PKG_FORM.notes.forEach(n => {
+      const nTitle = typeof n === 'string' ? n : n.title;
+      if (nTitle && !noteMap.has(nTitle)) {
+        const nObj = typeof n === 'object' ? n : { id: id('n'), title: nTitle, type: 'PDF', size: '1.8 MB', url: PDF, at: dayS() };
+        noteMap.set(nTitle, {
+          id: nTitle,
+          title: nTitle,
+          meta: `${nObj.type || 'PDF'} · ${nObj.size || '1.8 MB'}`,
+          category: nObj.type || 'PDF',
+          raw: nObj
+        });
+      }
+    });
+  }
+  const notes = Array.from(noteMap.values());
+
+  // 7. Students
+  const students = allStudents.map(s => {
+    const bObj = (D.batches || []).find(b => b.id === s.batch);
+    return {
+      id: s.id,
+      title: s.name,
+      meta: s.email,
+      category: bObj ? bObj.name : (s.mode || 'Online'),
+      raw: s
+    };
+  });
+
+  return { courses, series, vseries, tests, lectures, notes, students };
+}
+
+const GHL_DRAWER_META = {
+  courses: {
+    title: 'Select Courses',
+    subtitle: 'Bundle full courses into this package',
+    formKey: 'courses',
+    createLabel: '+ Create New Course'
+  },
+  series: {
+    title: 'Select Test Series',
+    subtitle: 'Attach structured test series',
+    formKey: 'testSeries',
+    createLabel: '+ Create New Test Series'
+  },
+  vseries: {
+    title: 'Select Video Series',
+    subtitle: 'Attach thematic video playlists & lecture series',
+    formKey: 'videoSeries',
+    createLabel: '+ Create New Video Series'
+  },
+  tests: {
+    title: 'Select CBT Tests',
+    subtitle: 'Add individual mock or practice tests',
+    formKey: 'tests',
+    createLabel: '+ Create New Test'
+  },
+  lectures: {
+    title: 'Select Video Lectures',
+    subtitle: 'Filter by subject and pick individual lectures',
+    formKey: 'lectures',
+    createLabel: '+ Create New Lecture'
+  },
+  notes: {
+    title: 'Select Study Notes & PDFs',
+    subtitle: 'Attach downloadable PDFs and formula sheets',
+    formKey: 'notes',
+    createLabel: '+ Upload New Note'
+  },
+  students: {
+    title: 'Assign Students',
+    subtitle: 'Search and select students to auto-enroll',
+    formKey: 'students',
+    createLabel: '+ Add New Student'
+  }
+};
+
+function getPkgSelectedSet(type) {
+  const f = window.PKG_FORM;
+  if (!f) return new Set();
+  const key = GHL_DRAWER_META[type].formKey;
+  const arr = f[key] || [];
+  if (type === 'notes') {
+    return new Set(arr.map(x => (typeof x === 'string' ? x : x.title)));
+  }
+  return new Set(arr);
+}
+
+function setPkgSelectedFromSet(type, setObj) {
+  const f = window.PKG_FORM;
+  if (!f) return;
+  const key = GHL_DRAWER_META[type].formKey;
+  const catalog = getPkgBuilderCatalog();
+  if (type === 'notes') {
+    const items = [];
+    setObj.forEach(title => {
+      const found = catalog.notes.find(n => n.id === title);
+      if (found && found.raw) {
+        items.push(found.raw);
+      } else {
+        items.push({ id: id('n'), title, type: 'PDF', size: '1.5 MB', url: PDF, at: dayS() });
+      }
+    });
+    f.notes = items;
+  } else {
+    f[key] = Array.from(setObj);
+  }
+}
+
+function openPkgSelectionDrawer(type) {
+  window.PKG_DRAWER = {
+    open: true,
+    type,
+    filter: 'All',
+    search: ''
+  };
+  renderPkgDrawerDOM();
+}
+
+function closePkgSelectionDrawer() {
+  window.PKG_DRAWER.open = false;
+  const bd = $('#pkgDrawerBackdrop');
+  const dr = $('#pkgSelectionDrawer');
+  if (bd) bd.classList.remove('open');
+  if (dr) dr.classList.remove('open');
+  if (S.p === 'create_package') {
+    rp();
+  }
+}
+
+function setPkgDrawerFilter(cat) {
+  window.PKG_DRAWER.filter = cat;
+  renderPkgDrawerDOM();
+}
+
+function onPkgDrawerSearch(val) {
+  window.PKG_DRAWER.search = val;
+  renderPkgDrawerItemsOnly();
+}
+
+function togglePkgDrawerItem(type, itemId) {
+  const setObj = getPkgSelectedSet(type);
+  if (setObj.has(itemId)) {
+    setObj.delete(itemId);
+  } else {
+    setObj.add(itemId);
+  }
+  setPkgSelectedFromSet(type, setObj);
+  renderPkgDrawerItemsOnly();
+  updateGhlTopSummary();
+}
+
+function clearPkgDrawerSelection() {
+  const type = window.PKG_DRAWER.type;
+  if (!type) return;
+  setPkgSelectedFromSet(type, new Set());
+  renderPkgDrawerItemsOnly();
+  updateGhlTopSummary();
+}
+
+function removePkgHubChip(type, itemId) {
+  const setObj = getPkgSelectedSet(type);
+  setObj.delete(itemId);
+  setPkgSelectedFromSet(type, setObj);
+  rp();
+}
+
+function updateGhlTopSummary() {
+  const f = window.PKG_FORM;
+  if (!f) return;
+  const totalContent =
+    (f.courses || []).length +
+    (f.testSeries || []).length +
+    (f.videoSeries || []).length +
+    (f.tests || []).length +
+    (f.lectures || []).length +
+    (f.notes || []).length;
+  const priceLabel = f.access === 'Free' ? 'Free' : `Paid (${R(+f.price || 0)})`;
+  const el = $('#ghlTopSummary');
+  if (el) {
+    el.innerHTML = `<strong>${totalContent}</strong> item${totalContent === 1 ? '' : 's'} bundled · <strong>${priceLabel}</strong>`;
+  }
+}
+
+function renderPkgDrawerItemsOnly() {
+  const dState = window.PKG_DRAWER;
+  if (!dState || !dState.open || !dState.type) return;
+  const type = dState.type;
+  const catalog = getPkgBuilderCatalog();
+  const items = catalog[type] || [];
+  const selectedSet = getPkgSelectedSet(type);
+  const query = (dState.search || '').toLowerCase();
+
+  const filtered = items.filter(item => {
+    const matchesCat = dState.filter === 'All' || item.category === dState.filter;
+    const matchesText = !query || item.title.toLowerCase().includes(query) || (item.meta || '').toLowerCase().includes(query);
+    return matchesCat && matchesText;
+  });
+
+  const bodyEl = $('#pkgDrawerBody');
+  if (bodyEl) {
+    if (!filtered.length) {
+      bodyEl.innerHTML = `
+        <div style="text-align:center;padding:36px 20px;color:#94a3b8;font-size:13px">
+          <div style="margin-bottom:10px">No matching items found.</div>
+          <button type="button" class="ghl-btn ghl-btn-primary" style="font-size:12.5px;padding:7px 14px" onclick="openPkgDrawerCreateNew('${type}')">
+            ${GHL_DRAWER_META[type].createLabel}
+          </button>
+        </div>
+      `;
+    } else {
+      bodyEl.innerHTML = filtered.map(item => {
+        const isChecked = selectedSet.has(item.id);
+        return `
+          <label class="ghl-select-item ${isChecked ? 'checked' : ''}">
+            <input type="checkbox" ${isChecked ? 'checked' : ''} onchange="togglePkgDrawerItem('${type}', '${E(item.id)}')" />
+            <div class="ghl-select-item-info">
+              <strong>${E(item.title)}</strong>
+              <span>${E(item.meta)}</span>
+            </div>
+          </label>
+        `;
+      }).join('');
+    }
+  }
+
+  const doneBtn = $('#pkgDrawerDoneBtn');
+  if (doneBtn) {
+    doneBtn.textContent = `Done (${selectedSet.size} Selected)`;
+  }
+}
+
+function renderPkgDrawerDOM() {
+  const dState = window.PKG_DRAWER;
+  const bd = $('#pkgDrawerBackdrop');
+  const dr = $('#pkgSelectionDrawer');
+  if (!bd || !dr) return;
+
+  if (!dState.open || !dState.type) {
+    bd.classList.remove('open');
+    dr.classList.remove('open');
+    return;
+  }
+
+  const type = dState.type;
+  const cfg = GHL_DRAWER_META[type];
+  const catalog = getPkgBuilderCatalog();
+  const items = catalog[type] || [];
+  const categories = ['All', ...new Set(items.map(i => i.category).filter(Boolean))];
+
+  $('#pkgDrawerTitle').textContent = cfg.title;
+  $('#pkgDrawerSubtitle').textContent = cfg.subtitle;
+
+  const createBtnWrap = $('#pkgDrawerCreateAction');
+  if (createBtnWrap) {
+    createBtnWrap.innerHTML = `
+      <button type="button" class="ghl-btn ghl-btn-primary ghl-drawer-create-btn" onclick="openPkgDrawerCreateNew('${type}')">
+        ${cfg.createLabel}
+      </button>
+    `;
+  }
+
+  const searchInput = $('#pkgDrawerSearch');
+  if (searchInput && searchInput.value !== dState.search) {
+    searchInput.value = dState.search || '';
+  }
+
+  const filterContainer = $('#pkgDrawerFilters');
+  if (filterContainer) {
+    filterContainer.innerHTML = categories.map(cat => `
+      <button type="button" class="ghl-filter-pill ${cat === dState.filter ? 'active' : ''}" onclick="setPkgDrawerFilter('${E(cat)}')">
+        ${E(cat)}
+      </button>
+    `).join('');
+  }
+
+  renderPkgDrawerItemsOnly();
+
+  bd.classList.add('open');
+  dr.classList.add('open');
+}
+
+/* =====================================================================
+   LAUNCH EXISTING INDIVIDUAL CREATION FLOWS IN CENTERED POPUP MODAL
+   ABOVE THE RIGHT SIDEBAR DRAWER & AUTO-SELECT ON COMPLETION
+   ===================================================================== */
+function syncNewlyCreatedPkgItems() {
+  const hk = window.__pkgCreateHook;
+  if (!hk || !window.PKG_FORM) return;
+  const f = window.PKG_FORM;
+
+  if (hk.type === 'courses') {
+    (D.courses || []).forEach(c => {
+      if (!hk.prevCourses.includes(c.id)) {
+        ensure(c);
+        if (!f.courses.includes(c.id)) f.courses.push(c.id);
+      }
+    });
+  } else if (hk.type === 'series') {
+    (D.pkgTestSeries || []).forEach(ts => {
+      if (!hk.prevPkgTs.includes(ts.id) && !f.testSeries.includes(ts.title)) {
+        f.testSeries.push(ts.title);
+      }
+    });
+    (D.instTestSeries || []).forEach(ts => {
+      if (!hk.prevInstTs.includes(ts.id) && !f.testSeries.includes(ts.title)) {
+        f.testSeries.push(ts.title);
+      }
+    });
+    (D.courses || []).forEach(c => {
+      (c.testSeries || []).forEach(ts => {
+        if (!hk.prevCourseTs.includes(ts.id) && !f.testSeries.includes(ts.title)) {
+          f.testSeries.push(ts.title);
+        }
+      });
+    });
+  } else if (hk.type === 'vseries') {
+    (D.pkgVideoSeries || []).forEach(vs => {
+      if (!hk.prevPkgVs.includes(vs.id) && !f.videoSeries.includes(vs.title)) {
+        f.videoSeries.push(vs.title);
+      }
+    });
+    (D.courses || []).forEach(c => {
+      (c.videoSeries || []).forEach(vs => {
+        if (!hk.prevCourseVs.includes(vs.id) && !f.videoSeries.includes(vs.title)) {
+          f.videoSeries.push(vs.title);
+        }
+      });
+    });
+  } else if (hk.type === 'tests') {
+    (D.tests || []).forEach(t => {
+      if (!hk.prevTests.includes(t.id) && !f.tests.includes(t.name)) {
+        f.tests.push(t.name);
+      }
+    });
+  } else if (hk.type === 'lectures') {
+    (D.courses || []).forEach(c => {
+      (c.subs || []).forEach(s => {
+        (s.lessons || []).forEach(l => {
+          if (!hk.prevLecs.includes(l.id) && !f.lectures.includes(l.title)) {
+            f.lectures.push(l.title);
+          }
+        });
+      });
+    });
+  } else if (hk.type === 'notes') {
+    (D.courses || []).forEach(c => {
+      (c.subs || []).forEach(s => {
+        (s.notes || []).forEach(n => {
+          if (!hk.prevNotes.includes(n.id)) {
+            f.notes = f.notes || [];
+            if (!f.notes.some(x => (typeof x === 'string' ? x : x.title) === n.title)) {
+              f.notes.push(n);
+            }
+          }
+        });
+      });
+    });
+  } else if (hk.type === 'students' || hk.type === 'csv') {
+    (D.users || []).forEach(u => {
+      if (u.role === 'student' && !hk.prevUsers.includes(u.id)) {
+        f.studentToggle = true;
+        if (!f.students.includes(u.id)) f.students.push(u.id);
+      }
+    });
+  }
+
+  window.__pkgCreateHook = null;
+}
+
+function openPkgDrawerCreateNew(type) {
+  window.__pkgCreateHook = {
+    type,
+    prevCourses: (D.courses || []).map(c => c.id),
+    prevTests: (D.tests || []).map(t => t.id),
+    prevUsers: (D.users || []).map(u => u.id),
+    prevPkgTs: (D.pkgTestSeries || []).map(x => x.id),
+    prevInstTs: (D.instTestSeries || []).map(x => x.id),
+    prevCourseTs: (D.courses || []).flatMap(c => (c.testSeries || []).map(x => x.id)),
+    prevPkgVs: (D.pkgVideoSeries || []).map(x => x.id),
+    prevCourseVs: (D.courses || []).flatMap(c => (c.videoSeries || []).map(x => x.id)),
+    prevLecs: (D.courses || []).flatMap(c => (c.subs || []).flatMap(s => (s.lessons || []).map(l => l.id))),
+    prevNotes: (D.courses || []).flatMap(c => (c.subs || []).flatMap(s => (s.notes || []).map(n => n.id)))
+  };
+
+  if (type === 'courses') {
+    // Existing 3-step Course Creation Wizard from script.js
+    return nw();
+  }
+
+  if (type === 'series') {
+    // Existing Test Series Creation Modal with Package-level default
+    return openCreateTestSeriesModal('Package');
+  }
+
+  if (type === 'tests') {
+    // Existing CBT Test Builder Modal with Package-level default
+    return et(null, '__package__', '', 'Package');
+  }
+
+  if (type === 'students') {
+    // Existing Add Student Modal from script.js
+    return es();
+  }
+
+  if (type === 'csv') {
+    // Existing 3-step Bulk CSV Student Import Modal from script.js
+    return ci();
+  }
+
+  if (type === 'vseries') {
+    // Video Series Creation flow supporting Package-level & Course-wise
+    const allCourses = (D.courses || []).map(ensure);
+    const defaultCid = (window.PKG_FORM && window.PKG_FORM.courses[0]) || (allCourses[0] && allCourses[0].id) || '';
+    let vsScope = 'Package';
+
+    const renderVsContent = () => {
+      const isPkg = vsScope === 'Package';
+      return `
+        <div style="display:grid;gap:12px">
+          <label>Series Title *
+            <input name="title" id="pkgVsTitle" placeholder="e.g. Complete Crash Course Video Series" value="">
+          </label>
+          <div class="fg">
+            <span style="font-size:12.5px;font-weight:600;color:var(--ink);display:block;margin-bottom:6px">Scope Assignment *</span>
+            <div class="seg" style="display:flex;gap:4px">
+              <button type="button" class="${isPkg ? 'on' : ''}" onclick="window.__vsScopeSelect('Package')">Package-level</button>
+              <button type="button" class="${!isPkg ? 'on' : ''}" onclick="window.__vsScopeSelect('Course')">Course-wise</button>
+            </div>
+          </div>
+          ${isPkg ? `
+            <div style="background:var(--s);border:1px solid var(--b);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--mute)">
+              <b>Package-Level Video Series:</b> Attached directly to this package without requiring a course.
+            </div>
+          ` : `
+            <label>Target Course *
+              <select name="cid" id="pkgVsCourse">
+                ${allCourses.map(c => `<option value="${c.id}" ${c.id === defaultCid ? 'selected' : ''}>${E(c.name)}</option>`).join('')}
+              </select>
+            </label>
+          `}
+          <label>Description
+            <textarea name="desc" id="pkgVsDesc" rows="3" placeholder="Brief overview of this video series..."></textarea>
+          </label>
+        </div>
+      `;
+    };
+
+    window.__vsScopeSelect = function (sc) {
+      vsScope = sc;
+      const body = document.querySelector('.mb');
+      if (body) {
+        const curT = $('#pkgVsTitle') ? $('#pkgVsTitle').value : '';
+        const curD = $('#pkgVsDesc') ? $('#pkgVsDesc').value : '';
+        body.innerHTML = renderVsContent() + '<p id="er" class="er"></p>';
+        if ($('#pkgVsTitle')) $('#pkgVsTitle').value = curT;
+        if ($('#pkgVsDesc')) $('#pkgVsDesc').value = curD;
+      }
+    };
+
+    modal(
+      'Create New Video Series',
+      renderVsContent(),
+      o => {
+        const title = ($('#pkgVsTitle') ? $('#pkgVsTitle').value : o.title || '').trim();
+        const desc = ($('#pkgVsDesc') ? $('#pkgVsDesc').value : o.desc || '').trim();
+        if (!title) return 'Title is required.';
+        if (vsScope === 'Package') {
+          D.pkgVideoSeries = D.pkgVideoSeries || [];
+          D.pkgVideoSeries.unshift({
+            id: id('vs_pkg_'),
+            title,
+            desc,
+            scope: 'Package',
+            videos: []
+          });
+        } else {
+          const cid = $('#pkgVsCourse') ? $('#pkgVsCourse').value : (o.cid || defaultCid);
+          const c = gcr(cid);
+          if (!c) return 'Please create a course first.';
+          c.videoSeries = c.videoSeries || [];
+          c.videoSeries.push({
+            id: id('vs'),
+            title,
+            desc,
+            videos: []
+          });
+        }
+      },
+      'Video series created'
+    );
+    return;
+  }
+
+  if (type === 'lectures') {
+    // Existing Lecture Creation flow (elec) with course & subject selector
+    const allCourses = (D.courses || []).map(ensure);
+    const defaultCid = (window.PKG_FORM && window.PKG_FORM.courses[0]) || (allCourses[0] && allCourses[0].id) || '';
+    const defaultCourse = allCourses.find(c => c.id === defaultCid) || allCourses[0];
+    const subs = defaultCourse ? (defaultCourse.subs || []) : [];
+
+    modal(
+      'Add lecture',
+      `<div class="g2">
+        <label>Course *
+          <select name="cid" onchange="const c=gcr(this.value);const sEl=document.getElementById('pkg_lec_sub');if(c&&sEl){sEl.innerHTML=(c.subs||[]).map(s=>'<option value=\\''+s.id+'\\'>'+E(s.name)+'</option>').join('')}">
+            ${allCourses.map(c => `<option value="${c.id}" ${c.id === (defaultCourse && defaultCourse.id) ? 'selected' : ''}>${E(c.name)}</option>`).join('')}
+          </select>
+        </label>
+        <label>Subject *
+          <select name="sid" id="pkg_lec_sub">
+            ${subs.map(s => `<option value="${s.id}">${E(s.name)}</option>`).join('')}
+          </select>
+        </label>
+      </div>` +
+      F('title', 'Lecture title *', 'text', [], '') +
+      F('desc', 'Description', 'area', [], '') +
+      `<div class=g2>${F('dur', 'Duration (mm:ss)', 'text', [], '18:30')}${F('video', 'Video URL', 'text', [], '')}</div><small>Leave the URL blank to attach a playable demo video.</small>`,
+      o => {
+        if (!o.title || !o.title.trim()) return 'Lecture title is required.';
+        const c = gcr(o.cid || (defaultCourse && defaultCourse.id));
+        if (!c) return 'Course is required.';
+        const s = subOf(c, o.sid) || (c.subs && c.subs[0]);
+        if (!s) return 'Subject is required.';
+        s.lessons.push({
+          id: id('l'),
+          title: o.title.trim(),
+          desc: (o.desc || '').trim(),
+          dur: o.dur || '18:30',
+          video: o.video || VID[Math.floor(Math.random() * VID.length)]
+        });
+        sync(c);
+      },
+      'Lecture added'
+    );
+    return;
+  }
+
+  if (type === 'notes') {
+    // Existing Note Upload flow (enote) with course & subject selector
+    const allCourses = (D.courses || []).map(ensure);
+    const defaultCid = (window.PKG_FORM && window.PKG_FORM.courses[0]) || (allCourses[0] && allCourses[0].id) || '';
+    const defaultCourse = allCourses.find(c => c.id === defaultCid) || allCourses[0];
+    const subs = defaultCourse ? (defaultCourse.subs || []) : [];
+    PF = null;
+
+    modal(
+      'Upload note',
+      `<div class="g2">
+        <label>Course *
+          <select name="cid" onchange="const c=gcr(this.value);const sEl=document.getElementById('pkg_note_sub');if(c&&sEl){sEl.innerHTML=(c.subs||[]).map(s=>'<option value=\\''+s.id+'\\'>'+E(s.name)+'</option>').join('')}">
+            ${allCourses.map(c => `<option value="${c.id}" ${c.id === (defaultCourse && defaultCourse.id) ? 'selected' : ''}>${E(c.name)}</option>`).join('')}
+          </select>
+        </label>
+        <label>Subject *
+          <select name="sid" id="pkg_note_sub">
+            ${subs.map(s => `<option value="${s.id}">${E(s.name)}</option>`).join('')}
+          </select>
+        </label>
+      </div>` +
+      F('title', 'Title *', 'text', [], '') +
+      F('type', 'Document type', 'select', ['PDF', 'DOCX', 'PPT'], 'PDF') +
+      `<label>Upload file (optional, max 1 MB)<input type=file id=nfile onchange="nf(this.files[0])"></label><small id=nfn>No file selected — a demo document will be attached.</small>`,
+      o => {
+        if (!o.title || !o.title.trim()) return 'Title is required.';
+        const c = gcr(o.cid || (defaultCourse && defaultCourse.id));
+        if (!c) return 'Course is required.';
+        const s = subOf(c, o.sid) || (c.subs && c.subs[0]);
+        if (!s) return 'Subject is required.';
+        const d = { title: o.title.trim(), type: o.type || 'PDF' };
+        if (PF) { d.url = PF.url; d.size = PF.size; }
+        s.notes.unshift({ id: id('n'), size: '1.4 MB', url: o.type === 'DOCX' ? DOCX : PDF, at: dayS(), ...d });
+      },
+      'Note uploaded'
+    );
+    return;
+  }
+}
+
+function openCreateBatchForPkg() {
+  const centers = (D.centers || []).filter(c => c.status === 'Active');
+  modal(
+    'Create New Batch',
+    F('name', 'Batch Name *', 'text', [], '') +
+    (hasC() && centers.length ? F('center', 'Center', 'select', centers.map(c => [c.id, c.name]), centers[0].id) : '') +
+    F('schedule', 'Timing / Schedule (Optional)', 'text', [], 'Mon–Fri · 5:00 PM'),
+    o => {
+      if (!o.name || !o.name.trim()) return 'Batch name is required.';
+      const newB = {
+        id: id('b'),
+        name: o.name.trim(),
+        center: o.center || (centers[0] ? centers[0].id : ''),
+        schedule: (o.schedule || '').trim(),
+        status: 'Active'
+      };
+      D.batches = D.batches || [];
+      D.batches.unshift(newB);
+      if (window.PKG_FORM) {
+        window.PKG_FORM.batch = newB.id;
+        window.PKG_FORM.advOpen = true;
+      }
+      save();
+      rp();
+    },
+    'Batch created & selected'
+  );
+}
+
+/* Final Save & Publish Package from Studio */
+function publishPackageFromStudio(openAfter = false, statusOverride = 'Active') {
+  const f = window.PKG_FORM;
+  if (!f.name || !f.name.trim()) {
+    toast('Please enter a Package Name first.');
+    const el = $('#cp_name');
+    if (el) el.focus();
+    return;
+  }
+
+  const pkgData = {
+    id: f.id || id('pkg'),
+    name: f.name.trim(),
+    batch: f.batch || '',
+    category: f.category || 'Engineering (JEE)',
+    validity: f.validity || '365 Days (1 Year)',
+    courses: f.courses || [],
+    access: f.access || 'Paid',
+    price: f.access === 'Paid' ? (+f.price || 0) : 0,
+    thumb: f.thumb || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop&q=80',
+    desc: (f.desc || '').trim() || 'Comprehensive all-in-one learning and CBT assessment bundle.',
+    videoSeries: f.videoSeries || [],
+    testSeries: f.testSeries || [],
+    lectures: f.lectures || [],
+    tests: f.tests || [],
+    notes: f.notes || [],
+    students: f.studentToggle ? (f.students || []) : [],
+    testsCount: (f.tests || []).length || 10,
+    notesCount: (f.notes || []).length || 5,
+    enrolledStudents: f.studentToggle ? (f.students || []).length : 0,
+    rating: 4.9,
+    reviews: 24,
+    type: 'comprehensive',
+    status: statusOverride || 'Active',
+    createdAt: dayS()
+  };
+
+  D.packages = D.packages || [];
+  const exIdx = D.packages.findIndex(p => p.id === pkgData.id);
+  if (exIdx >= 0) {
+    D.packages[exIdx] = pkgData;
+  } else {
+    D.packages.unshift(pkgData);
+  }
+
+  // Ensure assigned students also get enrolled in bundled courses & myPackages
+  D.myPackages = D.myPackages || {};
+  (pkgData.students || []).forEach(sid => {
+    D.myPackages[sid] = D.myPackages[sid] || [];
+    if (!D.myPackages[sid].includes(pkgData.id)) D.myPackages[sid].push(pkgData.id);
+    const stuObj = U(sid);
+    if (stuObj) {
+      stuObj.courses = stuObj.courses || [];
+      (pkgData.courses || []).forEach(cid => {
+        if (!stuObj.courses.includes(cid)) stuObj.courses.push(cid);
+      });
+    }
+  });
+
+  window.PKG_DRAWER = { open: false, type: null, filter: 'All', search: '' };
+  logA(`${statusOverride === 'Draft' ? 'Saved draft' : (f.isEdit ? 'Updated' : 'Published')} package: ${pkgData.name}`);
+  save();
+  toast(statusOverride === 'Draft' ? `Package "${pkgData.name}" saved as Draft!` : `Package "${pkgData.name}" published successfully!`);
+
+  if (openAfter) {
+    openPackageInNewTab(pkgData.id);
+  }
+  go('packages');
+}
+
+/* =====================================================================
+   PAGE: PG.create_package (GHL-Style Clean Click-to-Select Studio)
+   ===================================================================== */
+PG.create_package = function () {
+  window.PKG_FORM = window.PKG_FORM || resetPkgForm(null);
+  syncNewlyCreatedPkgItems();
+
+  const f = window.PKG_FORM;
+  const batches = D.batches || [];
+  const catalog = getPkgBuilderCatalog();
+
+  const thumbPresets = [
+    { url: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=600&auto=format&fit=crop&q=80', title: 'Tech & Study' },
+    { url: 'https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=600&auto=format&fit=crop&q=80', title: 'Mathematics & Physics' },
+    { url: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=600&auto=format&fit=crop&q=80', title: 'Science Lab' },
+    { url: 'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=600&auto=format&fit=crop&q=80', title: 'Books & Notes' }
+  ];
+
+  const totalContent =
+    (f.courses || []).length +
+    (f.testSeries || []).length +
+    (f.videoSeries || []).length +
+    (f.tests || []).length +
+    (f.lectures || []).length +
+    (f.notes || []).length;
+
+  const priceLabel = f.access === 'Free' ? 'Free' : `Paid (${R(+f.price || 0)})`;
+
+  const renderHubRowHTML = (type, iconLabel, emptyText, btnLabel) => {
+    const selectedSet = getPkgSelectedSet(type);
+    const ids = Array.from(selectedSet);
+    const list = catalog[type] || [];
+
+    const chipsHTML = ids.map(itemId => {
+      const item = list.find(x => x.id === itemId) || { id: itemId, title: itemId, meta: 'Selected' };
+      const shortMeta = (item.meta || '').split('·')[0].trim();
+      return `
+        <div class="ghl-chip">
+          <span>${E(item.title)}</span>
+          ${shortMeta ? `<small>${E(shortMeta)}</small>` : ''}
+          <button type="button" class="ghl-chip-remove" onclick="removePkgHubChip('${type}', '${E(item.id)}')" title="Remove">×</button>
+        </div>
+      `;
+    }).join('');
+
+    return `
+      <div class="ghl-hub-row">
+        <div class="ghl-hub-info">
+          <div class="ghl-hub-title-line">
+            <span>${iconLabel}</span>
+            <span class="ghl-count-pill ${ids.length > 0 ? 'has-items' : ''}">${ids.length} Selected</span>
+          </div>
+          ${ids.length === 0 ? `<div class="ghl-empty-hint">${emptyText}</div>` : ''}
+          ${ids.length > 0 ? `<div class="ghl-chip-list">${chipsHTML}</div>` : ''}
+        </div>
+        <button type="button" class="ghl-btn ghl-btn-soft" onclick="openPkgSelectionDrawer('${type}')">${btnLabel}</button>
+      </div>
+    `;
+  };
+
+  const studentSet = getPkgSelectedSet('students');
+  const studentIds = Array.from(studentSet);
+  const studentChipsHTML = studentIds.map(sid => {
+    const item = catalog.students.find(x => x.id === sid) || { id: sid, title: sid, meta: '' };
+    return `
+      <div class="ghl-chip">
+        <span>${E(item.title)}</span>
+        ${item.meta ? `<small>${E(item.meta)}</small>` : ''}
+        <button type="button" class="ghl-chip-remove" onclick="removePkgHubChip('students', '${E(item.id)}')" title="Remove">×</button>
+      </div>
+    `;
+  }).join('');
+
+  // Schedule drawer re-sync after DOM injection if drawer was open
+  setTimeout(() => {
+    if (window.PKG_DRAWER && window.PKG_DRAWER.open) {
+      renderPkgDrawerDOM();
+    }
+  }, 0);
+
+  return `
+    <div class="ghl-builder-shell">
+      <!-- GHL-Style Clean Sticky Top Bar -->
+      <div class="ghl-top-bar">
+        <div class="ghl-breadcrumb">
+          <button type="button" class="ghl-back-btn" onclick="window.PKG_DRAWER.open=false;go('packages')">← Back</button>
+          <span>Packages / <strong>${f.isEdit ? 'Edit Package' : 'Create New Package'}</strong></span>
+        </div>
+
+        <div class="ghl-top-actions">
+          <div class="ghl-bundle-counter-pill" id="ghlTopSummary">
+            <strong>${totalContent}</strong> item${totalContent === 1 ? '' : 's'} bundled · <strong>${priceLabel}</strong>
+          </div>
+          <button type="button" class="ghl-btn ghl-btn-secondary" onclick="publishPackageFromStudio(false, 'Draft')">Save Draft</button>
+          <button type="button" class="ghl-btn ghl-btn-primary" onclick="publishPackageFromStudio(false, 'Active')">${f.isEdit ? 'Update Package' : 'Publish Package'}</button>
+        </div>
+      </div>
+
+      <!-- Single Scrollable Canvas -->
+      <div class="ghl-workspace">
+        <div class="ghl-page-header">
+          <h1>${f.isEdit ? 'Edit Package · ' + E(f.name) : 'Create New Package'}</h1>
+          <p>Fill in the basic details below, then click "+ Select" on any content type to bundle it into this package.</p>
+        </div>
+
+        <!-- CARD 1: Basic Info & Pricing -->
+        <section class="ghl-card">
+          <div class="ghl-card-header">
+            <div class="ghl-card-title-wrap">
+              <div class="ghl-step-badge">1</div>
+              <div>
+                <div class="ghl-card-title">Basic Details & Pricing</div>
+                <div class="ghl-card-subtitle">Give your package a clear title and set whether it's paid or free.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ghl-form-grid">
+            <div class="ghl-form-group full">
+              <label>Package Name <span class="req">*</span></label>
+              <input type="text" id="cp_name" placeholder="e.g. JEE Advanced & Main 2026 Ultimate Rank Booster" value="${E(f.name)}" oninput="window.PKG_FORM.name=this.value" />
+            </div>
+
+            <div class="ghl-form-group">
+              <label>Access Type <span class="req">*</span></label>
+              <div class="ghl-segmented">
+                <button type="button" class="ghl-seg-btn ${f.access === 'Paid' ? 'active' : ''}" onclick="window.PKG_FORM.access='Paid';rp()">Paid Package</button>
+                <button type="button" class="ghl-seg-btn ${f.access === 'Free' ? 'active' : ''}" onclick="window.PKG_FORM.access='Free';window.PKG_FORM.price=0;rp()">Free Package</button>
+              </div>
+            </div>
+
+            <div class="ghl-form-group" style="${f.access === 'Paid' ? 'opacity:1' : 'opacity:0.45;pointer-events:none'}">
+              <label>Package Price (₹ INR) <span class="req">*</span></label>
+              <input type="number" id="cp_price" value="${f.access === 'Paid' ? f.price : 0}" ${f.access === 'Free' ? 'disabled' : ''} oninput="window.PKG_FORM.price=+this.value;updateGhlTopSummary()" />
+            </div>
+
+            <div class="ghl-form-group full">
+              <label>Short Description</label>
+              <textarea rows="2" placeholder="Briefly describe what students will learn and get in this package..." oninput="window.PKG_FORM.desc=this.value">${E(f.desc)}</textarea>
+            </div>
+          </div>
+
+          <!-- Progressive Disclosure for Batch & Validity Settings -->
+          <button type="button" class="ghl-advanced-toggle" onclick="window.PKG_FORM.advOpen=!window.PKG_FORM.advOpen;rp()">
+            <span>${f.advOpen ? '▾' : '▸'}</span> Batch & Validity Settings (${f.batch ? E(((D.batches || []).find(b => b.id === f.batch) || {}).name || 'Batch Selected') : 'All Batches'} · ${E(f.validity)})
+          </button>
+
+          <div class="ghl-advanced-panel ${f.advOpen ? 'open' : ''}" style="grid-template-columns:1fr 1fr">
+            <div class="ghl-form-group">
+              <label>Target Batch / Cohort</label>
+              <div style="display:flex;gap:8px;align-items:center">
+                <select style="flex:1" onchange="if(this.value==='__new__'){this.value=window.PKG_FORM.batch||'';openCreateBatchForPkg();}else{window.PKG_FORM.batch=this.value;rp();}">
+                  <option value="">All Batches / Open</option>
+                  ${batches.map(b => `<option value="${b.id}" ${f.batch === b.id ? 'selected' : ''}>${E(b.name)}</option>`).join('')}
+                  <option value="__new__">+ Create New Batch...</option>
+                </select>
+                <button type="button" class="ghl-btn ghl-btn-soft" style="padding:8px 12px;font-size:12.5px" onclick="openCreateBatchForPkg()">+ New Batch</button>
+              </div>
+            </div>
+
+            <div class="ghl-form-group">
+              <label>Validity Period</label>
+              ${(() => {
+                const presets = ['365 Days (1 Year)', '180 Days (6 Months)', '90 Days (3 Months)', 'Lifetime Access'];
+                const isCustom = f.validityMode === 'custom' || (f.validity && !presets.includes(f.validity));
+                return `
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <select onchange="if(this.value==='__custom__'){window.PKG_FORM.validityMode='custom';if(presets.includes(window.PKG_FORM.validity))window.PKG_FORM.validity='60 Days';rp();}else{window.PKG_FORM.validityMode='preset';window.PKG_FORM.validity=this.value;rp();}">
+                      ${presets.map(v => `<option value="${v}" ${!isCustom && f.validity === v ? 'selected' : ''}>${v}</option>`).join('')}
+                      <option value="__custom__" ${isCustom ? 'selected' : ''}>Custom Validity...</option>
+                    </select>
+                    ${isCustom ? `
+                      <input type="text" placeholder="e.g. 45 Days, 18 Months, or Until 31 Dec 2026" value="${E(f.validity || '')}" oninput="window.PKG_FORM.validity=this.value" />
+                    ` : ''}
+                  </div>
+                `;
+              })()}
+            </div>
+          </div>
+        </section>
+
+        <!-- CARD 2: Compact Cover Image -->
+        <section class="ghl-card">
+          <div class="ghl-card-header">
+            <div class="ghl-card-title-wrap">
+              <div class="ghl-step-badge">2</div>
+              <div>
+                <div class="ghl-card-title">Cover Image</div>
+                <div class="ghl-card-subtitle">Pick a ready-made cover preset or upload your own banner.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ghl-cover-row">
+            <img id="cp_thumb_preview" class="ghl-cover-preview" src="${E(f.thumb)}" alt="Cover Preview" />
+            <div class="ghl-cover-controls">
+              <div class="ghl-preset-strip">
+                ${thumbPresets.map(p => `
+                  <img class="ghl-preset-thumb ${f.thumb === p.url ? 'selected' : ''}" data-url="${p.url}" src="${p.url}" onclick="selectGhlPreset('${p.url}')" title="${E(p.title)}" />
+                `).join('')}
+                <label class="ghl-btn ghl-btn-secondary" style="padding: 6px 12px; font-size: 12.5px; cursor: pointer; margin: 0;">
+                  Upload Image
+                  <input type="file" accept="image/*" style="display:none" onchange="handlePkgStudioThumbUpload(this)" />
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- CARD 3: Click-to-Select Curriculum Content Hub -->
+        <section class="ghl-card">
+          <div class="ghl-card-header">
+            <div class="ghl-card-title-wrap">
+              <div class="ghl-step-badge">3</div>
+              <div>
+                <div class="ghl-card-title">What’s Inside This Package?</div>
+                <div class="ghl-card-subtitle">Lists stay hidden until you click "+ Select" — keeping your workspace clean.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ghl-content-hub">
+            ${renderHubRowHTML('courses', `${ico('courses', 16)} Bundled Courses`, 'No courses added yet. Click "+ Select Courses" to choose from your library or create new.', '+ Select Courses')}
+            ${renderHubRowHTML('series', `${ico('testseries', 16)} Test Series`, 'No test series attached yet.', '+ Select Test Series')}
+            ${renderHubRowHTML('vseries', `${ico('video', 16)} Video Series`, 'No video series attached yet.', '+ Select Video Series')}
+            ${renderHubRowHTML('tests', `${ico('tests', 16)} Individual CBT Tests`, 'No individual mock tests added yet.', '+ Select Tests')}
+            ${renderHubRowHTML('lectures', `${ico('video', 16)} Standalone Video Lectures`, 'No standalone lectures added yet. Filter by Physics, Chemistry, or Math inside the drawer.', '+ Select Lectures')}
+            ${renderHubRowHTML('notes', `${ico('file', 16)} Study Notes & PDFs`, 'No PDF handouts or formula sheets attached yet.', '+ Select Notes')}
+          </div>
+        </section>
+
+        <!-- CARD 4: Optional Student Enrollment Behind Toggle -->
+        <section class="ghl-card">
+          <div class="ghl-switch-row">
+            <div class="ghl-card-title-wrap">
+              <div class="ghl-step-badge">4</div>
+              <div>
+                <div class="ghl-card-title">Enroll Specific Students Now (Optional)</div>
+                <div class="ghl-card-subtitle">Leave this off if students will purchase or self-enroll after publishing.</div>
+              </div>
+            </div>
+            <label class="ghl-switch">
+              <input type="checkbox" ${f.studentToggle ? 'checked' : ''} onchange="window.PKG_FORM.studentToggle=this.checked;rp()" />
+              <span class="ghl-slider"></span>
+            </label>
+          </div>
+
+          <div class="ghl-student-box ${f.studentToggle ? 'open' : ''}">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+              <div>
+                <span class="ghl-count-pill ${studentIds.length > 0 ? 'has-items' : ''}">${studentIds.length} Student${studentIds.length === 1 ? '' : 's'} Assigned</span>
+                <span style="font-size: 12.5px; color: var(--m); margin-left: 8px;">Select individual students or upload a CSV</span>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button type="button" class="ghl-btn ghl-btn-secondary" style="padding: 7px 12px; font-size: 12.5px;" onclick="openPkgDrawerCreateNew('csv')">Bulk CSV</button>
+                <button type="button" class="ghl-btn ghl-btn-soft" onclick="openPkgSelectionDrawer('students')">+ Select Students</button>
+              </div>
+            </div>
+            ${studentIds.length > 0 ? `<div class="ghl-chip-list">${studentChipsHTML}</div>` : ''}
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- GHL-Style Slide-Over Right Sidebar Selection Drawer -->
+    <div class="ghl-drawer-backdrop" id="pkgDrawerBackdrop" onclick="closePkgSelectionDrawer()"></div>
+    <aside class="ghl-drawer" id="pkgSelectionDrawer">
+      <div class="ghl-drawer-header">
+        <div>
+          <h3 id="pkgDrawerTitle">Select Items</h3>
+          <span style="font-size: 12px; color: var(--m);" id="pkgDrawerSubtitle">Choose items to include in your package</span>
+        </div>
+        <button type="button" class="ghl-drawer-close" onclick="closePkgSelectionDrawer()">×</button>
+      </div>
+
+      <div class="ghl-drawer-controls">
+        <div class="ghl-drawer-create-bar">
+          <span style="font-size:12px;color:var(--m);font-weight:500">Need a new item?</span>
+          <div id="pkgDrawerCreateAction"></div>
+        </div>
+        <input type="text" id="pkgDrawerSearch" placeholder="Search by name..." oninput="onPkgDrawerSearch(this.value)" />
+        <div class="ghl-filter-pills" id="pkgDrawerFilters"></div>
+      </div>
+
+      <div class="ghl-drawer-body" id="pkgDrawerBody"></div>
+
+      <div class="ghl-drawer-footer">
+        <button type="button" class="ghl-btn ghl-btn-secondary" onclick="clearPkgDrawerSelection()">Clear All</button>
+        <button type="button" class="ghl-btn ghl-btn-primary" id="pkgDrawerDoneBtn" onclick="closePkgSelectionDrawer()">Done (0 Selected)</button>
+      </div>
+    </aside>
+  `;
+};
+
+/* =====================================================================
+   PAGE: PG.package_view (Tree-Sidebar Package Explorer in New Tab)
+   Minimalist normal-weight typography, expandable left tree sidebar
+   (Courses, Test Series, Tests, Video Series, Videos, Notes, Students)
+   and rich right-hand detail pane showing all deep nested data.
+   ===================================================================== */
+window.PKG_VIEW_STATE = window.PKG_VIEW_STATE || {
+  pkgId: null,
+  node: 'overview',
+  expanded: { courses: true, testseries: true, tests: false, videoseries: true, videos: false, notes: false },
+  search: ''
+};
+
+function setPkgViewNode(nodeKey) {
+  window.PKG_VIEW_STATE.node = nodeKey;
+  rp();
+}
+
+function togglePkgTreeExpand(key, ev) {
+  if (ev) ev.stopPropagation();
+  window.PKG_VIEW_STATE.expanded[key] = !window.PKG_VIEW_STATE.expanded[key];
+  rp();
+}
+
+function onPkgViewSearch(val) {
+  window.PKG_VIEW_STATE.search = val;
+  rp();
+}
+
+PG.package_view = function () {
+  const urlParams = new URLSearchParams(window.location.search);
+  const pkgId = S.selectedPkgId || urlParams.get('pkg');
+  const pkgs = D.packages || [];
+  const pkg = pkgs.find(p => p.id === pkgId) || pkgs[0];
+
+  if (!pkg) {
+    return `
+      <div class="em" style="padding:60px 20px">
+        <h3 style="font-weight:500">Package Not Found</h3>
+        <p style="margin:8px 0 16px">The requested package could not be found.</p>
+        <button class="b1" onclick="go('packages')">← Back to All Packages</button>
+      </div>
+    `;
+  }
+
+  if (window.PKG_VIEW_STATE.pkgId !== pkg.id) {
+    window.PKG_VIEW_STATE.pkgId = pkg.id;
+    window.PKG_VIEW_STATE.node = 'overview';
+    window.PKG_VIEW_STATE.search = '';
+  }
+
+  const st = window.PKG_VIEW_STATE;
+  const b = (D.batches || []).find(x => x.id === pkg.batch);
+  const courseObjs = (D.courses || []).filter(c => (pkg.courses || []).includes(c.id)).map(ensure);
+  const assignedStudents = (D.users || []).filter(u => u.role === 'student' && (pkg.students || []).includes(u.id));
+
+  // Deep resolve Test Series & their nested tests + questions
+  const resolvedTestSeries = (pkg.testSeries || []).map(tsItem => {
+    const title = typeof tsItem === 'string' ? tsItem : tsItem.title;
+    let found = (D.pkgTestSeries || []).find(x => x.title === title) ||
+                (D.instTestSeries || []).find(x => x.title === title) ||
+                (D.testSeries || []).find(x => x.title === title);
+    if (!found) {
+      for (const c of courseObjs) {
+        const fc = (c.testSeries || []).find(x => x.title === title);
+        if (fc) { found = fc; break; }
+      }
+    }
+    const baseTs = found || { title, desc: 'Comprehensive CBT mock test series aligned with standard examination pattern.', tests: [] };
+    const deepTests = (baseTs.tests || []).map(tRef => {
+      return (D.tests || []).find(t => t.id === tRef.refId || t.name === tRef.name) || {
+        id: tRef.id || 't_nested',
+        name: tRef.name,
+        min: tRef.min || 60,
+        qs: [
+          { q: `Sample Question 1 for ${tRef.name}`, o: ['Option A', 'Option B', 'Option C', 'Option D'], a: 0 },
+          { q: `Sample Question 2 for ${tRef.name}`, o: ['True Statement', 'False Statement', 'Both A & B', 'None'], a: 0 }
+        ]
+      };
+    });
+    return { ...baseTs, deepTests };
+  });
+
+  // Deep resolve Direct CBT Tests & their nested questions
+  const resolvedTests = (pkg.tests || []).map(tIdentifier => {
+    const found = (D.tests || []).find(t => t.name === tIdentifier || t.id === tIdentifier);
+    if (found) return found;
+    return {
+      id: id('t'),
+      name: tIdentifier,
+      min: 45,
+      sub: 'General',
+      qs: [
+        { q: `Core evaluation problem for ${tIdentifier}:`, o: ['First Law', 'Second Law', 'Third Law', 'Zeroeth Law'], a: 1 }
+      ]
+    };
+  });
+
+  // Deep resolve Video Series & nested videos
+  const resolvedVideoSeries = (pkg.videoSeries || []).map(vsItem => {
+    const title = typeof vsItem === 'string' ? vsItem : vsItem.title;
+    let found = (D.pkgVideoSeries || []).find(x => x.title === title) || null;
+    if (!found) {
+      for (const c of courseObjs) {
+        const fv = (c.videoSeries || []).find(x => x.title === title);
+        if (fv) { found = fv; break; }
+      }
+    }
+    return found || {
+      title,
+      desc: 'Structured HD concept lecture series with solved examples.',
+      videos: [
+        { id: id('v'), title: `${title} — Part 1: Core Concepts`, dur: '24:10', video: VID[0] },
+        { id: id('v'), title: `${title} — Part 2: Advanced Applications`, dur: '19:45', video: VID[1] }
+      ]
+    };
+  });
+
+  // Deep resolve Standalone Videos / Lectures
+  const resolvedLectures = (pkg.lectures || []).map(lItem => {
+    const title = typeof lItem === 'string' ? lItem : lItem.title;
+    for (const c of courseObjs) {
+      for (const s of (c.subs || [])) {
+        const fl = (s.lessons || []).find(l => l.title === title);
+        if (fl) return { ...fl, courseName: c.name, subName: s.name };
+      }
+    }
+    return { title, dur: '22:30', video: VID[0], desc: `In-depth video session on ${title}.`, courseName: 'Master Bundle', subName: 'Core Subject' };
+  });
+
+  // Deep resolve Notes & Documents
+  let resolvedNotes = pkg.notes && pkg.notes.length ? [...pkg.notes] : [];
+  if (!resolvedNotes.length) {
+    courseObjs.forEach(c => {
+      (c.subs || []).forEach(s => {
+        (s.notes || []).forEach(n => resolvedNotes.push({ ...n, courseName: c.name, subName: s.name }));
+      });
+    });
+  }
+
+  const q = (st.search || '').trim().toLowerCase();
+  const matchQ = text => !q || String(text || '').toLowerCase().includes(q);
+  const isExp = k => q ? true : !!st.expanded[k];
+
+  const chevronSvg = open => `<svg class="pv-chev ${open ? 'open' : ''}" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>`;
+
+  const renderTreeRow = (nodeKey, label, count, iconName, colorCls, depth = 0, expandKey = null) => {
+    const active = st.node === nodeKey;
+    const hasExp = !!expandKey;
+    const expOpen = hasExp ? isExp(expandKey) : false;
+    return `
+      <div class="pv-tree-row depth-${depth} ${active ? 'active' : ''}" onclick="setPkgViewNode('${nodeKey}')">
+        <span class="pv-chev-wrap" ${hasExp ? `onclick="togglePkgTreeExpand('${expandKey}', event)"` : ''}>
+          ${hasExp ? chevronSvg(expOpen) : '<span class="pv-chev-spacer"></span>'}
+        </span>
+        <span class="pv-node-ico ${colorCls}">${ico(iconName, 13)}</span>
+        <span class="pv-node-label">${E(label)}</span>
+        ${count !== null && count !== undefined ? `<span class="pv-node-count">${count}</span>` : ''}
+      </div>
+    `;
+  };
+
+  // Build Left Sidebar Tree HTML
+  let treeHtml = '';
+  if (matchQ('overview') || matchQ(pkg.name)) {
+    treeHtml += renderTreeRow('overview', 'Package Overview', null, 'packages', 'ico-blue', 0, null);
+  }
+
+  // 1. Courses Branch
+  const filteredCourses = courseObjs.filter(c => matchQ(c.name) || matchQ(c.code) || (c.subs || []).some(s => matchQ(s.name)));
+  if (!q || filteredCourses.length || matchQ('courses')) {
+    treeHtml += renderTreeRow('courses', 'Courses', courseObjs.length, 'courses', 'ico-blue', 0, 'courses');
+    if (isExp('courses')) {
+      filteredCourses.forEach(c => {
+        const cKey = `course:${c.id}`;
+        const cExpKey = `c_${c.id}`;
+        const subs = (c.subs || []).filter(s => matchQ(s.name) || matchQ(c.name));
+        treeHtml += renderTreeRow(cKey, c.name, (c.subs || []).length, 'courses', 'ico-indigo', 1, subs.length ? cExpKey : null);
+        if (subs.length && isExp(cExpKey)) {
+          subs.forEach(s => {
+            treeHtml += renderTreeRow(`sub:${c.id}:${s.id}`, s.name, (s.lessons || []).length + (s.notes || []).length, 'book', 'ico-purple', 2, null);
+          });
+        }
+      });
+    }
+  }
+
+  // 2. Test Series Branch
+  const filteredTs = resolvedTestSeries.filter((ts, idx) => matchQ(ts.title) || (ts.deepTests || []).some(t => matchQ(t.name)));
+  if (!q || filteredTs.length || matchQ('test series')) {
+    treeHtml += renderTreeRow('testseries', 'Test Series', resolvedTestSeries.length, 'testseries', 'ico-purple', 0, 'testseries');
+    if (isExp('testseries')) {
+      resolvedTestSeries.forEach((ts, idx) => {
+        if (q && !matchQ(ts.title) && !(ts.deepTests || []).some(t => matchQ(t.name))) return;
+        const tsExpKey = `ts_${idx}`;
+        treeHtml += renderTreeRow(`ts:${idx}`, ts.title, (ts.deepTests || []).length, 'testseries', 'ico-purple', 1, (ts.deepTests || []).length ? tsExpKey : null);
+        if ((ts.deepTests || []).length && isExp(tsExpKey)) {
+          ts.deepTests.forEach((t, ti) => {
+            if (q && !matchQ(t.name) && !matchQ(ts.title)) return;
+            treeHtml += renderTreeRow(`tstest:${idx}:${ti}`, t.name, (t.qs || []).length, 'tests', 'ico-slate', 2, null);
+          });
+        }
+      });
+    }
+  }
+
+  // 3. Tests Branch
+  const filteredTests = resolvedTests.filter(t => matchQ(t.name));
+  if (!q || filteredTests.length || matchQ('tests')) {
+    treeHtml += renderTreeRow('tests', 'Tests', resolvedTests.length, 'tests', 'ico-green', 0, 'tests');
+    if (isExp('tests')) {
+      resolvedTests.forEach((t, idx) => {
+        if (q && !matchQ(t.name)) return;
+        treeHtml += renderTreeRow(`test:${idx}`, t.name, (t.qs || []).length, 'tests', 'ico-green', 1, null);
+      });
+    }
+  }
+
+  // 4. Video Series Branch
+  const filteredVs = resolvedVideoSeries.filter(vs => matchQ(vs.title) || (vs.videos || []).some(v => matchQ(v.title)));
+  if (!q || filteredVs.length || matchQ('video series')) {
+    treeHtml += renderTreeRow('videoseries', 'Video Series', resolvedVideoSeries.length, 'video', 'ico-sky', 0, 'videoseries');
+    if (isExp('videoseries')) {
+      resolvedVideoSeries.forEach((vs, idx) => {
+        if (q && !matchQ(vs.title) && !(vs.videos || []).some(v => matchQ(v.title))) return;
+        const vsExpKey = `vs_${idx}`;
+        treeHtml += renderTreeRow(`vs:${idx}`, vs.title, (vs.videos || []).length, 'video', 'ico-sky', 1, (vs.videos || []).length ? vsExpKey : null);
+        if ((vs.videos || []).length && isExp(vsExpKey)) {
+          vs.videos.forEach((v, vi) => {
+            if (q && !matchQ(v.title) && !matchQ(vs.title)) return;
+            treeHtml += renderTreeRow(`vsvid:${idx}:${vi}`, v.title, v.dur || '', 'video', 'ico-slate', 2, null);
+          });
+        }
+      });
+    }
+  }
+
+  // 5. Videos Branch
+  const filteredVideos = resolvedLectures.filter(l => matchQ(l.title));
+  if (!q || filteredVideos.length || matchQ('video')) {
+    treeHtml += renderTreeRow('videos', 'Video', resolvedLectures.length, 'video', 'ico-amber', 0, 'videos');
+    if (isExp('videos')) {
+      resolvedLectures.forEach((l, idx) => {
+        if (q && !matchQ(l.title)) return;
+        treeHtml += renderTreeRow(`video:${idx}`, l.title, l.dur || '', 'video', 'ico-amber', 1, null);
+      });
+    }
+  }
+
+  // 6. Notes Branch
+  const filteredNotes = resolvedNotes.filter(n => matchQ(n.title));
+  if (!q || filteredNotes.length || matchQ('notes')) {
+    treeHtml += renderTreeRow('notes', 'Notes', resolvedNotes.length, 'file', 'ico-rose', 0, 'notes');
+    if (isExp('notes')) {
+      resolvedNotes.forEach((n, idx) => {
+        if (q && !matchQ(n.title)) return;
+        treeHtml += renderTreeRow(`note:${idx}`, n.title, n.type || 'PDF', 'file', 'ico-rose', 1, null);
+      });
+    }
+  }
+
+  // 7. Students
+  if (matchQ('students') || assignedStudents.some(s => matchQ(s.name))) {
+    treeHtml += renderTreeRow('students', 'Students', assignedStudents.length, 'students', 'ico-slate', 0, null);
+  }
+
+  // Helper to render Question Bank block
+  const renderQuestionsBlock = qs => (qs && qs.length)
+    ? `<div class="pv-q-list">${qs.map((qItem, qi) => `
+        <div class="pv-q-card">
+          <div class="pv-q-title">Q${qi + 1}. ${E(qItem.q)}</div>
+          <div class="pv-q-opts">
+            ${(qItem.o || []).map((opt, oi) => `
+              <div class="pv-q-opt ${oi === qItem.a ? 'correct' : ''}">
+                <span>${['A', 'B', 'C', 'D'][oi] || (oi + 1)}. ${E(opt)}</span>
+                ${oi === qItem.a ? '<span class="pv-q-key">Correct</span>' : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `).join('')}</div>`
+    : '<div class="pv-empty-msg">No questions added to this test yet.</div>';
+
+  // Build Right Detail Pane HTML based on st.node
+  let rightHtml = '';
+  const node = st.node || 'overview';
+
+  if (node === 'overview') {
+    rightHtml = `
+      <div class="pv-bc">Package <span>›</span> Overview</div>
+      <div class="pv-detail-head">
+        <div class="pv-detail-title-wrap">
+          <span class="pv-detail-ico ico-blue">${ico('packages', 18)}</span>
+          <div>
+            <h2>${E(pkg.name)}</h2>
+            <div class="pv-detail-meta">
+              ${pkg.access === 'Paid' ? R(pkg.price) : 'Free Package'} · ${E(pkg.category || 'Comprehensive')} · ${b ? E(b.name) : 'All Batches'} · Validity: ${E(pkg.validity || '365 Days')} · ${E(pkg.status || 'Active')}
+            </div>
+          </div>
+        </div>
+        <div class="pv-detail-actions">
+          ${can() ? `<button class="b2" onclick="editPackageInCreator('${pkg.id}')">Edit Package</button>` : ''}
+        </div>
+      </div>
+
+      <div class="pv-overview-banner">
+        <img src="${pkg.thumb || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=80'}" alt="${E(pkg.name)}">
+        <div class="pv-overview-desc">
+          <div class="pv-sub-label">Package Description</div>
+          <p>${E(pkg.desc || pkg.description || 'Complete end-to-end learning and assessment bundle.')}</p>
+        </div>
+      </div>
+
+      <div class="pv-section-bar">
+        <span>Package Contents</span>
+        <span class="pv-muted-count">${courseObjs.length + resolvedTestSeries.length + resolvedTests.length + resolvedVideoSeries.length + resolvedLectures.length + resolvedNotes.length} items</span>
+      </div>
+      <div class="pv-child-grid">
+        <div class="pv-child-card" onclick="setPkgViewNode('courses')">
+          <div class="pv-child-left"><span class="pv-node-ico ico-blue">${ico('courses', 14)}</span><span>Courses</span></div>
+          <span class="pv-child-meta">${courseObjs.length} courses</span>
+        </div>
+        <div class="pv-child-card" onclick="setPkgViewNode('testseries')">
+          <div class="pv-child-left"><span class="pv-node-ico ico-purple">${ico('testseries', 14)}</span><span>Test Series</span></div>
+          <span class="pv-child-meta">${resolvedTestSeries.length} series</span>
+        </div>
+        <div class="pv-child-card" onclick="setPkgViewNode('tests')">
+          <div class="pv-child-left"><span class="pv-node-ico ico-green">${ico('tests', 14)}</span><span>Tests</span></div>
+          <span class="pv-child-meta">${resolvedTests.length} tests</span>
+        </div>
+        <div class="pv-child-card" onclick="setPkgViewNode('videoseries')">
+          <div class="pv-child-left"><span class="pv-node-ico ico-sky">${ico('video', 14)}</span><span>Video Series</span></div>
+          <span class="pv-child-meta">${resolvedVideoSeries.length} series</span>
+        </div>
+        <div class="pv-child-card" onclick="setPkgViewNode('videos')">
+          <div class="pv-child-left"><span class="pv-node-ico ico-amber">${ico('video', 14)}</span><span>Videos</span></div>
+          <span class="pv-child-meta">${resolvedLectures.length} videos</span>
+        </div>
+        <div class="pv-child-card" onclick="setPkgViewNode('notes')">
+          <div class="pv-child-left"><span class="pv-node-ico ico-rose">${ico('file', 14)}</span><span>Notes</span></div>
+          <span class="pv-child-meta">${resolvedNotes.length} documents</span>
+        </div>
+        <div class="pv-child-card" onclick="setPkgViewNode('students')">
+          <div class="pv-child-left"><span class="pv-node-ico ico-slate">${ico('students', 14)}</span><span>Assigned Students</span></div>
+          <span class="pv-child-meta">${assignedStudents.length} students</span>
+        </div>
+      </div>
+    `;
+  } else if (node === 'courses') {
+    rightHtml = `
+      <div class="pv-bc">Package <span>›</span> Courses</div>
+      <div class="pv-detail-head">
+        <div class="pv-detail-title-wrap">
+          <span class="pv-detail-ico ico-blue">${ico('courses', 18)}</span>
+          <div>
+            <h2>Bundled Courses</h2>
+            <div class="pv-detail-meta">${courseObjs.length} courses included in ${E(pkg.name)}</div>
+          </div>
+        </div>
+      </div>
+      ${courseObjs.length ? `
+        <div class="pv-child-grid">
+          ${courseObjs.map(c => `
+            <div class="pv-child-card" onclick="setPkgViewNode('course:${c.id}')">
+              <div class="pv-child-left"><span class="pv-node-ico ico-indigo">${ico('courses', 14)}</span><span>${E(c.name)}</span></div>
+              <span class="pv-child-meta">${(c.subs || []).length} subjects</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : '<div class="pv-empty-msg">No courses bundled in this package.</div>'}
+    `;
+  } else if (node.startsWith('course:')) {
+    const cid = node.split(':')[1];
+    const c = courseObjs.find(x => x.id === cid);
+    if (c) {
+      const ins = U(c.instr);
+      const totalVids = (c.subs || []).reduce((a, s) => a + (s.lessons || []).length, 0);
+      const totalNotes = (c.subs || []).reduce((a, s) => a + (s.notes || []).length, 0);
+      const totalTests = (D.tests || []).filter(t => t.course === c.id).length;
+      rightHtml = `
+        <div class="pv-bc"><a onclick="setPkgViewNode('courses')">Courses</a> <span>›</span> ${E(c.name)}</div>
+        <div class="pv-detail-head">
+          <div class="pv-detail-title-wrap">
+            <span class="pv-detail-ico ico-indigo">${ico('courses', 18)}</span>
+            <div>
+              <h2>${E(c.name)}</h2>
+              <div class="pv-detail-meta">Code ${E(c.code)} · ${totalTests} tests · ${totalVids} videos · ${totalNotes} PDFs · Instructor: ${ins ? E(ins.name) : 'Faculty'}</div>
+            </div>
+          </div>
+          <div class="pv-detail-actions">
+            <button class="b2" onclick="S.cv='${c.id}';go('courses')">Open Full Course</button>
+          </div>
+        </div>
+        ${c.desc ? `<p class="pv-body-copy">${E(c.desc)}</p>` : ''}
+        <div class="pv-section-bar">
+          <span>Subjects · ${(c.subs || []).length}</span>
+        </div>
+        <div class="pv-child-grid">
+          ${(c.subs || []).map(s => `
+            <div class="pv-child-card" onclick="setPkgViewNode('sub:${c.id}:${s.id}')">
+              <div class="pv-child-left"><span class="pv-node-ico ico-purple">${ico('book', 14)}</span><span>${E(s.name)}</span></div>
+              <span class="pv-child-meta">${(s.lessons || []).length} videos · ${(s.notes || []).length} notes</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+  } else if (node.startsWith('sub:')) {
+    const [, cid, sid] = node.split(':');
+    const c = courseObjs.find(x => x.id === cid);
+    const s = c ? (c.subs || []).find(x => x.id === sid) : null;
+    if (c && s) {
+      const tchr = U(s.teacher);
+      rightHtml = `
+        <div class="pv-bc"><a onclick="setPkgViewNode('courses')">Courses</a> <span>›</span> <a onclick="setPkgViewNode('course:${c.id}')">${E(c.name)}</a> <span>›</span> ${E(s.name)}</div>
+        <div class="pv-detail-head">
+          <div class="pv-detail-title-wrap">
+            <span class="pv-detail-ico ico-purple">${ico('book', 18)}</span>
+            <div>
+              <h2>${E(s.name)}</h2>
+              <div class="pv-detail-meta">${(s.lessons || []).length} videos · ${(s.notes || []).length} notes · Faculty: ${tchr ? E(tchr.name) : 'Assigned Instructor'}</div>
+            </div>
+          </div>
+        </div>
+        <div class="pv-section-bar"><span>Video Lectures · ${(s.lessons || []).length}</span></div>
+        ${(s.lessons || []).length ? `
+          <div class="pv-child-grid" style="margin-bottom:20px">
+            ${s.lessons.map(l => `
+              <div class="pv-child-card" onclick="playLec('${c.id}','${s.id}','${l.id}')">
+                <div class="pv-child-left"><span class="pv-node-ico ico-amber">${ico('video', 14)}</span><span>${E(l.title)}</span></div>
+                <span class="pv-child-meta">${l.dur || '20:00'} · Play</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<div class="pv-empty-msg" style="margin-bottom:16px">No lectures in this subject.</div>'}
+        <div class="pv-section-bar"><span>Study Notes · ${(s.notes || []).length}</span></div>
+        ${(s.notes || []).length ? `
+          <div class="pv-child-grid">
+            ${s.notes.map(n => `
+              <a class="pv-child-card" style="text-decoration:none" href="${n.url || PDF}" target="_blank">
+                <div class="pv-child-left"><span class="pv-node-ico ico-rose">${ico('file', 14)}</span><span>${E(n.title)}</span></div>
+                <span class="pv-child-meta">${E(n.type || 'PDF')} · ${E(n.size || '1.4 MB')}</span>
+              </a>
+            `).join('')}
+          </div>
+        ` : '<div class="pv-empty-msg">No notes in this subject.</div>'}
+      `;
+    }
+  } else if (node === 'testseries') {
+    rightHtml = `
+      <div class="pv-bc">Package <span>›</span> Test Series</div>
+      <div class="pv-detail-head">
+        <div class="pv-detail-title-wrap">
+          <span class="pv-detail-ico ico-purple">${ico('testseries', 18)}</span>
+          <div>
+            <h2>Test Series</h2>
+            <div class="pv-detail-meta">${resolvedTestSeries.length} test series included</div>
+          </div>
+        </div>
+      </div>
+      ${resolvedTestSeries.length ? `
+        <div class="pv-child-grid">
+          ${resolvedTestSeries.map((ts, idx) => `
+            <div class="pv-child-card" onclick="setPkgViewNode('ts:${idx}')">
+              <div class="pv-child-left"><span class="pv-node-ico ico-purple">${ico('testseries', 14)}</span><span>${E(ts.title)}</span></div>
+              <span class="pv-child-meta">${(ts.deepTests || []).length} tests</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : '<div class="pv-empty-msg">No test series included in this package.</div>'}
+    `;
+  } else if (node.startsWith('ts:')) {
+    const idx = +node.split(':')[1];
+    const ts = resolvedTestSeries[idx];
+    if (ts) {
+      rightHtml = `
+        <div class="pv-bc"><a onclick="setPkgViewNode('testseries')">Test Series</a> <span>›</span> ${E(ts.title)}</div>
+        <div class="pv-detail-head">
+          <div class="pv-detail-title-wrap">
+            <span class="pv-detail-ico ico-purple">${ico('testseries', 18)}</span>
+            <div>
+              <h2>${E(ts.title)}</h2>
+              <div class="pv-detail-meta">${(ts.deepTests || []).length} nested mock tests</div>
+            </div>
+          </div>
+        </div>
+        ${ts.desc ? `<p class="pv-body-copy">${E(ts.desc)}</p>` : ''}
+        <div class="pv-section-bar"><span>Tests in Series · ${(ts.deepTests || []).length}</span></div>
+        ${(ts.deepTests || []).length ? `
+          <div class="pv-child-grid">
+            ${ts.deepTests.map((t, ti) => `
+              <div class="pv-child-card" onclick="setPkgViewNode('tstest:${idx}:${ti}')">
+                <div class="pv-child-left"><span class="pv-node-ico ico-green">${ico('tests', 14)}</span><span>${E(t.name)}</span></div>
+                <span class="pv-child-meta">${t.min || 60} mins · ${(t.qs || []).length} Qs</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<div class="pv-empty-msg">No tests linked inside this series yet.</div>'}
+      `;
+    }
+  } else if (node.startsWith('tstest:')) {
+    const [, tsIdx, tIdx] = node.split(':').map(Number);
+    const ts = resolvedTestSeries[tsIdx];
+    const t = ts ? (ts.deepTests || [])[tIdx] : null;
+    if (ts && t) {
+      rightHtml = `
+        <div class="pv-bc"><a onclick="setPkgViewNode('testseries')">Test Series</a> <span>›</span> <a onclick="setPkgViewNode('ts:${tsIdx}')">${E(ts.title)}</a> <span>›</span> ${E(t.name)}</div>
+        <div class="pv-detail-head">
+          <div class="pv-detail-title-wrap">
+            <span class="pv-detail-ico ico-green">${ico('tests', 18)}</span>
+            <div>
+              <h2>${E(t.name)}</h2>
+              <div class="pv-detail-meta">Duration: ${t.min || 60} mins · ${(t.qs || []).length} questions</div>
+            </div>
+          </div>
+          <div class="pv-detail-actions">
+            <button class="b1" onclick="startOnlineTest('${t.id}')">Launch CBT Test</button>
+          </div>
+        </div>
+        <div class="pv-section-bar"><span>Questions & Answer Key · ${(t.qs || []).length}</span></div>
+        ${renderQuestionsBlock(t.qs)}
+      `;
+    }
+  } else if (node === 'tests') {
+    rightHtml = `
+      <div class="pv-bc">Package <span>›</span> Tests</div>
+      <div class="pv-detail-head">
+        <div class="pv-detail-title-wrap">
+          <span class="pv-detail-ico ico-green">${ico('tests', 18)}</span>
+          <div>
+            <h2>CBT Mock Tests</h2>
+            <div class="pv-detail-meta">${resolvedTests.length} tests included</div>
+          </div>
+        </div>
+      </div>
+      ${resolvedTests.length ? `
+        <div class="pv-child-grid">
+          ${resolvedTests.map((t, idx) => `
+            <div class="pv-child-card" onclick="setPkgViewNode('test:${idx}')">
+              <div class="pv-child-left"><span class="pv-node-ico ico-green">${ico('tests', 14)}</span><span>${E(t.name)}</span></div>
+              <span class="pv-child-meta">${t.min || 30} mins · ${(t.qs || []).length} Qs</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : '<div class="pv-empty-msg">No standalone tests included.</div>'}
+    `;
+  } else if (node.startsWith('test:')) {
+    const idx = +node.split(':')[1];
+    const t = resolvedTests[idx];
+    if (t) {
+      rightHtml = `
+        <div class="pv-bc"><a onclick="setPkgViewNode('tests')">Tests</a> <span>›</span> ${E(t.name)}</div>
+        <div class="pv-detail-head">
+          <div class="pv-detail-title-wrap">
+            <span class="pv-detail-ico ico-green">${ico('tests', 18)}</span>
+            <div>
+              <h2>${E(t.name)}</h2>
+              <div class="pv-detail-meta">Duration: ${t.min || 30} mins · ${(t.qs || []).length} questions · Subject: ${E(t.sub || 'Multi-Subject')}</div>
+            </div>
+          </div>
+          <div class="pv-detail-actions">
+            <button class="b1" onclick="startOnlineTest('${t.id}')">Launch CBT Test</button>
+          </div>
+        </div>
+        <div class="pv-section-bar"><span>Questions & Answer Key · ${(t.qs || []).length}</span></div>
+        ${renderQuestionsBlock(t.qs)}
+      `;
+    }
+  } else if (node === 'videoseries') {
+    rightHtml = `
+      <div class="pv-bc">Package <span>›</span> Video Series</div>
+      <div class="pv-detail-head">
+        <div class="pv-detail-title-wrap">
+          <span class="pv-detail-ico ico-sky">${ico('video', 18)}</span>
+          <div>
+            <h2>Video Series</h2>
+            <div class="pv-detail-meta">${resolvedVideoSeries.length} video series included</div>
+          </div>
+        </div>
+      </div>
+      ${resolvedVideoSeries.length ? `
+        <div class="pv-child-grid">
+          ${resolvedVideoSeries.map((vs, idx) => `
+            <div class="pv-child-card" onclick="setPkgViewNode('vs:${idx}')">
+              <div class="pv-child-left"><span class="pv-node-ico ico-sky">${ico('video', 14)}</span><span>${E(vs.title)}</span></div>
+              <span class="pv-child-meta">${(vs.videos || []).length} videos</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : '<div class="pv-empty-msg">No video series included.</div>'}
+    `;
+  } else if (node.startsWith('vs:')) {
+    const idx = +node.split(':')[1];
+    const vs = resolvedVideoSeries[idx];
+    if (vs) {
+      rightHtml = `
+        <div class="pv-bc"><a onclick="setPkgViewNode('videoseries')">Video Series</a> <span>›</span> ${E(vs.title)}</div>
+        <div class="pv-detail-head">
+          <div class="pv-detail-title-wrap">
+            <span class="pv-detail-ico ico-sky">${ico('video', 18)}</span>
+            <div>
+              <h2>${E(vs.title)}</h2>
+              <div class="pv-detail-meta">${(vs.videos || []).length} videos in this series</div>
+            </div>
+          </div>
+        </div>
+        ${vs.desc ? `<p class="pv-body-copy">${E(vs.desc)}</p>` : ''}
+        <div class="pv-section-bar"><span>Videos · ${(vs.videos || []).length}</span></div>
+        ${(vs.videos || []).length ? `
+          <div class="pv-child-grid">
+            ${vs.videos.map((v, vi) => `
+              <div class="pv-child-card" onclick="setPkgViewNode('vsvid:${idx}:${vi}')">
+                <div class="pv-child-left"><span class="pv-node-ico ico-sky">${ico('video', 14)}</span><span>${E(v.title)}</span></div>
+                <span class="pv-child-meta">${v.dur || '20:00'}</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<div class="pv-empty-msg">No videos added to this series yet.</div>'}
+      `;
+    }
+  } else if (node.startsWith('vsvid:')) {
+    const [, vsIdx, vIdx] = node.split(':').map(Number);
+    const vs = resolvedVideoSeries[vsIdx];
+    const v = vs ? (vs.videos || [])[vIdx] : null;
+    if (vs && v) {
+      rightHtml = `
+        <div class="pv-bc"><a onclick="setPkgViewNode('videoseries')">Video Series</a> <span>›</span> <a onclick="setPkgViewNode('vs:${vsIdx}')">${E(vs.title)}</a> <span>›</span> ${E(v.title)}</div>
+        <div class="pv-detail-head">
+          <div class="pv-detail-title-wrap">
+            <span class="pv-detail-ico ico-sky">${ico('video', 18)}</span>
+            <div>
+              <h2>${E(v.title)}</h2>
+              <div class="pv-detail-meta">Duration: ${v.dur || '20:00'} · Series: ${E(vs.title)}</div>
+            </div>
+          </div>
+        </div>
+        <video src="${v.video || VID[0]}" controls style="width:100%;max-height:420px;border-radius:10px;background:#000;margin-top:8px"></video>
+      `;
+    }
+  } else if (node === 'videos') {
+    rightHtml = `
+      <div class="pv-bc">Package <span>›</span> Video</div>
+      <div class="pv-detail-head">
+        <div class="pv-detail-title-wrap">
+          <span class="pv-detail-ico ico-amber">${ico('video', 18)}</span>
+          <div>
+            <h2>Videos & Lectures</h2>
+            <div class="pv-detail-meta">${resolvedLectures.length} standalone video lectures</div>
+          </div>
+        </div>
+      </div>
+      ${resolvedLectures.length ? `
+        <div class="pv-child-grid">
+          ${resolvedLectures.map((l, idx) => `
+            <div class="pv-child-card" onclick="setPkgViewNode('video:${idx}')">
+              <div class="pv-child-left"><span class="pv-node-ico ico-amber">${ico('video', 14)}</span><span>${E(l.title)}</span></div>
+              <span class="pv-child-meta">${l.dur || '22:30'}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : '<div class="pv-empty-msg">No standalone videos included.</div>'}
+    `;
+  } else if (node.startsWith('video:')) {
+    const idx = +node.split(':')[1];
+    const l = resolvedLectures[idx];
+    if (l) {
+      rightHtml = `
+        <div class="pv-bc"><a onclick="setPkgViewNode('videos')">Video</a> <span>›</span> ${E(l.title)}</div>
+        <div class="pv-detail-head">
+          <div class="pv-detail-title-wrap">
+            <span class="pv-detail-ico ico-amber">${ico('video', 18)}</span>
+            <div>
+              <h2>${E(l.title)}</h2>
+              <div class="pv-detail-meta">${E(l.courseName || 'Course')} · ${E(l.subName || 'Subject')} · Duration: ${l.dur || '22:30'}</div>
+            </div>
+          </div>
+        </div>
+        <video src="${l.video || VID[0]}" controls style="width:100%;max-height:420px;border-radius:10px;background:#000;margin-top:8px"></video>
+        ${l.desc ? `<p class="pv-body-copy" style="margin-top:14px">${E(l.desc)}</p>` : ''}
+      `;
+    }
+  } else if (node === 'notes' || node.startsWith('note:')) {
+    const singleIdx = node.startsWith('note:') ? +node.split(':')[1] : -1;
+    const singleNote = singleIdx >= 0 ? resolvedNotes[singleIdx] : null;
+    if (singleNote) {
+      rightHtml = `
+        <div class="pv-bc"><a onclick="setPkgViewNode('notes')">Notes</a> <span>›</span> ${E(singleNote.title)}</div>
+        <div class="pv-detail-head">
+          <div class="pv-detail-title-wrap">
+            <span class="pv-detail-ico ico-rose">${ico('file', 18)}</span>
+            <div>
+              <h2>${E(singleNote.title)}</h2>
+              <div class="pv-detail-meta">Format: ${E(singleNote.type || 'PDF')} · Size: ${E(singleNote.size || '1.5 MB')} · Added: ${E(singleNote.at || 'Available')}</div>
+            </div>
+          </div>
+          <div class="pv-detail-actions">
+            <a class="b1" style="text-decoration:none" href="${singleNote.url || PDF}" target="_blank">Download Document</a>
+          </div>
+        </div>
+        <div class="pv-note-preview-box">
+          <p>Document ready for viewing and download.</p>
+          <a class="b2" style="text-decoration:none;display:inline-flex;margin-top:8px" href="${singleNote.url || PDF}" target="_blank">Open ${E(singleNote.type || 'PDF')} in New Tab</a>
+        </div>
+      `;
+    } else {
+      rightHtml = `
+        <div class="pv-bc">Package <span>›</span> Notes</div>
+        <div class="pv-detail-head">
+          <div class="pv-detail-title-wrap">
+            <span class="pv-detail-ico ico-rose">${ico('file', 18)}</span>
+            <div>
+              <h2>Study Notes & Documents</h2>
+              <div class="pv-detail-meta">${resolvedNotes.length} documents included</div>
+            </div>
+          </div>
+        </div>
+        ${resolvedNotes.length ? `
+          <div class="pv-child-grid">
+            ${resolvedNotes.map((n, idx) => `
+              <div class="pv-child-card" onclick="setPkgViewNode('note:${idx}')">
+                <div class="pv-child-left"><span class="pv-node-ico ico-rose">${ico('file', 14)}</span><span>${E(n.title)}</span></div>
+                <span class="pv-child-meta">${E(n.type || 'PDF')} · ${E(n.size || '1.5 MB')}</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : '<div class="pv-empty-msg">No study notes included.</div>'}
+      `;
+    }
+  } else if (node === 'students') {
+    rightHtml = `
+      <div class="pv-bc">Package <span>›</span> Students</div>
+      <div class="pv-detail-head">
+        <div class="pv-detail-title-wrap">
+          <span class="pv-detail-ico ico-slate">${ico('students', 18)}</span>
+          <div>
+            <h2>Assigned Students</h2>
+            <div class="pv-detail-meta">${assignedStudents.length} learners enrolled in ${E(pkg.name)}</div>
+          </div>
+        </div>
+        <div class="pv-detail-actions">
+          ${can() ? `<button class="b1" onclick="openAssignStudentsModal('${pkg.id}')">+ Assign Students</button>` : ''}
+        </div>
+      </div>
+      ${assignedStudents.length ? `
+        <div class="pv-child-grid">
+          ${assignedStudents.map(s => `
+            <div class="pv-child-card" style="cursor:default">
+              <div class="pv-child-left">
+                <img src="${av(s)}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;flex-shrink:0">
+                <div style="min-width:0">
+                  <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(s.name)}</div>
+                  <div style="font-size:11.5px;color:var(--m);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${E(s.email)}</div>
+                </div>
+              </div>
+              <span class="pv-child-meta">${sRegDate(s)}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : '<div class="pv-empty-msg">No students assigned to this package yet.</div>'}
+    `;
+  }
+
+  return `
+    <div class="pv-shell">
+      <div class="pv-top-header">
+        <div>
+          <h1>${E(pkg.name)}</h1>
+          <p>${courseObjs.length} courses · ${resolvedTestSeries.length} test series · ${resolvedTests.length} tests · ${resolvedVideoSeries.length} video series · ${resolvedLectures.length} videos · ${resolvedNotes.length} notes</p>
+        </div>
+        <div class="pv-top-actions">
+          <button class="b2" onclick="go('packages')">← All Packages</button>
+          ${can() ? `<button class="b2" onclick="openAssignStudentsModal('${pkg.id}')">+ Assign Students</button>` : ''}
+          ${can() ? `<button class="b1" onclick="editPackageInCreator('${pkg.id}')">+ Edit Package</button>` : ''}
+        </div>
+      </div>
+
+      <div class="pv-split">
+        <aside class="pv-sidebar-card">
+          <div class="pv-search-wrap">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="text" placeholder="Find a course, test, video, or note..." value="${E(st.search)}" oninput="onPkgViewSearch(this.value)">
+          </div>
+          <div class="pv-tree-list">
+            ${treeHtml || '<div class="pv-empty-msg">No matching items.</div>'}
+          </div>
+        </aside>
+
+        <section class="pv-detail-card">
+          ${rightHtml}
+        </section>
+      </div>
+    </div>
+  `;
+};
+
+// Re-render if initial URL requested package_view or create_package
+if (S && (S.p === 'package_view' || S.p === 'create_package')) {
+  render();
+}
+
+/* =====================================================================
+   SOCIAL STUDIO — TEMPLATE-FIRST MARKETING & RESULT CREATOR
+   Minimalist light & normal-weight UI, locked brand guidelines,
+   1-click student auto-fill, drag-drop cropper, & high-res Canvas export
+   ===================================================================== */
+
+const SOCIAL_TEMPLATES = {
+  instagram: [
+    { id: 'ig_topper', name: 'Topper Spotlight', desc: 'Square 1080x1080 · Highlight a top scorer', ratio: '1 / 1', w: 1080, h: 1080, slides: 1 },
+    { id: 'ig_milestone', name: 'Milestone Card', desc: 'Square 1080x1080 · Celebrate batch or test milestones', ratio: '1 / 1', w: 1080, h: 1080, slides: 1 },
+    { id: 'ig_quote', name: 'Student Quote', desc: 'Square 1080x1080 · Testimonial with portrait', ratio: '1 / 1', w: 1080, h: 1080, slides: 1 },
+    { id: 'ig_batch', name: 'Batch Achievement', desc: 'Square 1080x1080 · Cohort selection summary', ratio: '1 / 1', w: 1080, h: 1080, slides: 1 },
+    { id: 'ig_carousel', name: 'Result Carousel (3 Slides)', desc: 'Square 1080x1080 · Multi-slide story deck', ratio: '1 / 1', w: 1080, h: 1080, slides: 3 }
+  ],
+  linkedin: [
+    { id: 'li_spotlight', name: 'Topper Spotlight Banner', desc: 'Landscape 1200x627 · Professional achievement post', ratio: '1200 / 627', w: 1200, h: 627, slides: 1 },
+    { id: 'li_milestone', name: 'Institute Milestone', desc: 'Landscape 1200x627 · Key academic benchmark', ratio: '1200 / 627', w: 1200, h: 627, slides: 1 },
+    { id: 'li_quote', name: 'Student Testimonial', desc: 'Landscape 1200x627 · Quote & batch attribution', ratio: '1200 / 627', w: 1200, h: 627, slides: 1 },
+    { id: 'li_batch', name: 'Batch Excellence', desc: 'Landscape 1200x627 · Cohort performance summary', ratio: '1200 / 627', w: 1200, h: 627, slides: 1 }
+  ],
+  whatsapp: [
+    { id: 'wa_topper', name: 'Topper Status Card', desc: 'Portrait 1080x1350 · Ready for WhatsApp Status', ratio: '4 / 5', w: 1080, h: 1350, slides: 1 },
+    { id: 'wa_admissions', name: 'Admissions Open', desc: 'Square 1080x1080 · New batch announcement', ratio: '1 / 1', w: 1080, h: 1080, slides: 1 },
+    { id: 'wa_milestone', name: 'Weekly Ranker', desc: 'Square 1080x1080 · Quick leaderboard shoutout', ratio: '1 / 1', w: 1080, h: 1080, slides: 1 },
+    { id: 'wa_quote', name: 'Learner Story', desc: 'Portrait 1080x1350 · Student review share card', ratio: '4 / 5', w: 1080, h: 1350, slides: 1 }
+  ]
+};
+
+const SOCIAL_THEMES = {
+  blue: { label: 'Trigrexam Blue', bg: '#0f172a', grad: 'linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%)', c1: '#0f172a', c2: '#1d4ed8', ink: '#ffffff', mute: '#cbd5e1', accent: '#38bdf8', cardBg: 'rgba(255,255,255,0.08)', border: 'rgba(255,255,255,0.16)' },
+  dark: { label: 'Dark Slate', bg: '#111827', grad: 'linear-gradient(135deg, #090d16 0%, #1f2937 100%)', c1: '#090d16', c2: '#1f2937', ink: '#f8fafc', mute: '#94a3b8', accent: '#60a5fa', cardBg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.14)' },
+  white: { label: 'Clean White', bg: '#ffffff', grad: 'linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%)', c1: '#ffffff', c2: '#f1f5f9', ink: '#0f172a', mute: '#64748b', accent: '#0284c7', cardBg: '#f8fafc', border: '#e2e8f0' }
+};
+
+window.SOCIAL_STUDIO = window.SOCIAL_STUDIO || {
+  platform: 'instagram',
+  templateId: 'ig_topper',
+  theme: 'blue',
+  cropShape: 'circle',
+  imgZoom: 1,
+  slideIdx: 0,
+  studentId: 's1',
+  badge: 'Topper Spotlight',
+  headline: '99.4%ile in All India CBT Mock',
+  name: 'Aarav Mehta',
+  subtext: 'JEE Alpha Batch · Rank #1',
+  metricValue: '284 / 300',
+  metricLabel: 'Aggregate Score',
+  quote: 'Consistent mock test practice and instant analytics helped me improve accuracy across every subject.',
+  photo: ''
+};
+
+function getSocialActiveTpl() {
+  const s = window.SOCIAL_STUDIO;
+  const list = SOCIAL_TEMPLATES[s.platform] || SOCIAL_TEMPLATES.instagram;
+  return list.find(t => t.id === s.templateId) || list[0];
+}
+
+function setSocialPlatform(plat) {
+  window.SOCIAL_STUDIO.platform = plat;
+  window.SOCIAL_STUDIO.templateId = SOCIAL_TEMPLATES[plat][0].id;
+  window.SOCIAL_STUDIO.slideIdx = 0;
+  rp();
+}
+
+function setSocialTemplate(tplId) {
+  window.SOCIAL_STUDIO.templateId = tplId;
+  window.SOCIAL_STUDIO.slideIdx = 0;
+  rp();
+}
+
+function autoFillSocialStudent(sid) {
+  const s = window.SOCIAL_STUDIO;
+  s.studentId = sid;
+  if (!sid) return;
+  const u = U(sid);
+  if (!u) return;
+  const b = (D.batches || []).find(x => x.id === u.batch);
+  const resList = (D.res || []).filter(r => r.sid === sid);
+  const latest = resList[0];
+  const tObj = latest ? (D.tests || []).find(t => t.id === latest.tid) : null;
+  const maxS = latest ? (latest.maxScore || latest.total || (tObj && tObj.qs ? tObj.qs.length : 10)) : 100;
+  const scoreVal = latest ? latest.score : 94;
+
+  s.name = u.name;
+  s.subtext = `${b ? b.name : 'Online Scholar'} · ${tObj ? tObj.name : 'All India Series'}`;
+  s.metricValue = latest ? `${scoreVal} / ${maxS}` : '94%';
+  s.metricLabel = latest ? 'Latest Test Score' : 'Overall Accuracy';
+  s.headline = latest
+    ? `Scored ${Math.round((scoreVal / Math.max(1, maxS)) * 100)}% in ${tObj ? tObj.name : 'CBT Mock'}`
+    : `Outstanding Performance in ${b ? b.name : 'Mock Series'}`;
+  s.photo = av(u);
+  rp();
+  toast(`Auto-filled details for ${u.name}`);
+}
+
+function handleSocialPhotoUpload(file) {
+  if (!file || !/^image\//.test(file.type)) return toast('Please choose a valid image file.');
+  const r = new FileReader();
+  r.onload = e => {
+    window.SOCIAL_STUDIO.photo = e.target.result;
+    rp();
+    toast('Photo updated');
+  };
+  r.readAsDataURL(file);
+}
+
+function buildSocialCaption() {
+  const s = window.SOCIAL_STUDIO;
+  const inst = D.inst || 'Trigrexam Institute';
+  if (s.platform === 'linkedin') {
+    return `Congratulations to ${s.name} (${s.subtext}) for achieving ${s.metricValue} — ${s.headline}.\n\n"${s.quote}"\n\nAt ${inst}, structured CBT practice and personalized analytics empower every learner to reach their peak.\n\nAdmissions Open · Enroll now at ${inst}.\n#Education #StudentSuccess #CBT #ExamPrep`;
+  }
+  if (s.platform === 'whatsapp') {
+    return `*${s.badge} — ${inst}*\n\n*${s.name}* (${s.subtext})\n${s.headline} | *${s.metricValue}*\n\n"${s.quote}"\n\nAdmissions Open — Message us to join the next batch.`;
+  }
+  return `${s.badge}: ${s.name}\n${s.headline} (${s.metricValue})\n${s.subtext}\n\n"${s.quote}"\n\nAdmissions Open at ${inst}. Link in bio to enroll.\n#Trigrexam #Toppers #MockTests #StudySmart`;
+}
+
+function copySocialCaption() {
+  const txt = buildSocialCaption();
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(() => toast('Caption copied to clipboard'));
+  } else {
+    toast('Caption ready to copy');
+  }
+}
+
+function renderSocialCanvasSlide(tpl, slideIndex, format = 'png') {
+  return new Promise(resolve => {
+    const s = window.SOCIAL_STUDIO;
+    const th = SOCIAL_THEMES[s.theme] || SOCIAL_THEMES.blue;
+    const inst = D.inst || 'trigrexam';
+    const cv = document.createElement('canvas');
+    cv.width = tpl.w;
+    cv.height = tpl.h;
+    const ctx = cv.getContext('2d');
+    const W = tpl.w, H = tpl.h;
+
+    // Background gradient
+    const g = ctx.createLinearGradient(0, 0, W, H);
+    g.addColorStop(0, th.c1);
+    g.addColorStop(1, th.c2);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle border accent
+    ctx.strokeStyle = th.border;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(24, 24, W - 48, H - 48);
+
+    // Locked Brand Header
+    ctx.fillStyle = th.accent;
+    ctx.font = '500 28px Poppins, sans-serif';
+    ctx.fillText(inst.toUpperCase(), 64, 92);
+
+    // Badge pill
+    const badgeTxt = slideIndex === 1 ? 'SCORE BREAKDOWN' : slideIndex === 2 ? 'ADMISSIONS OPEN' : (s.badge || 'Topper Spotlight').toUpperCase();
+    ctx.fillStyle = th.cardBg;
+    ctx.fillRect(W - 340, 56, 276, 46);
+    ctx.fillStyle = th.accent;
+    ctx.font = '500 20px Poppins, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(badgeTxt, W - 202, 86);
+    ctx.textAlign = 'left';
+
+    // Footer CTA (Locked)
+    ctx.fillStyle = th.cardBg;
+    ctx.fillRect(24, H - 108, W - 48, 84);
+    ctx.fillStyle = th.ink;
+    ctx.font = '400 24px Poppins, sans-serif';
+    ctx.fillText(`Admissions Open · Join ${inst} Today`, 64, H - 56);
+    ctx.fillStyle = th.accent;
+    ctx.textAlign = 'right';
+    ctx.fillText('trigrexam.demo', W - 64, H - 56);
+    ctx.textAlign = 'left';
+
+    const drawTextContent = () => {
+      const isLand = W > H;
+      const textX = isLand ? 420 : 64;
+      const maxTW = isLand ? W - 480 : W - 128;
+
+      if (slideIndex === 1) {
+        ctx.fillStyle = th.ink;
+        ctx.font = '500 46px Poppins, sans-serif';
+        ctx.fillText(s.name, 64, 220);
+        ctx.fillStyle = th.mute;
+        ctx.font = '400 28px Poppins, sans-serif';
+        ctx.fillText(s.subtext, 64, 270);
+        ctx.fillStyle = th.accent;
+        ctx.font = '500 84px Poppins, sans-serif';
+        ctx.fillText(s.metricValue, 64, 430);
+        ctx.fillStyle = th.mute;
+        ctx.font = '400 28px Poppins, sans-serif';
+        ctx.fillText(s.metricLabel, 64, 480);
+      } else if (slideIndex === 2) {
+        ctx.fillStyle = th.ink;
+        ctx.font = '500 52px Poppins, sans-serif';
+        ctx.fillText('Start Your Preparation', 64, 280);
+        ctx.fillStyle = th.mute;
+        ctx.font = '400 30px Poppins, sans-serif';
+        ctx.fillText(`Join ${inst} for structured mock tests & mentorship.`, 64, 350);
+      } else {
+        ctx.fillStyle = th.ink;
+        ctx.font = `500 ${isLand ? 40 : 48}px Poppins, sans-serif`;
+        wrapCanvasText(ctx, s.headline, textX, isLand ? 200 : (H * 0.56), maxTW, isLand ? 52 : 62);
+
+        ctx.fillStyle = th.accent;
+        ctx.font = `500 ${isLand ? 34 : 40}px Poppins, sans-serif`;
+        ctx.fillText(`${s.metricValue} · ${s.metricLabel}`, textX, isLand ? 340 : (H * 0.72));
+
+        ctx.fillStyle = th.ink;
+        ctx.font = '500 30px Poppins, sans-serif';
+        ctx.fillText(s.name, textX, isLand ? 410 : (H * 0.80));
+
+        ctx.fillStyle = th.mute;
+        ctx.font = '400 24px Poppins, sans-serif';
+        ctx.fillText(s.subtext, textX, isLand ? 450 : (H * 0.84));
+      }
+
+      const mime = format === 'jpg' ? 'image/jpeg' : 'image/png';
+      resolve(cv.toDataURL(mime, 0.94));
+    };
+
+    const photoSrc = s.photo || av(U(s.studentId) || D.users.find(u => u.role === 'student'));
+    if (photoSrc && slideIndex === 0) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const isLand = W > H;
+        const size = isLand ? 260 : 300;
+        const px = isLand ? 80 : (W - size) / 2;
+        const py = isLand ? 165 : 145;
+        ctx.save();
+        ctx.beginPath();
+        if (s.cropShape === 'circle') {
+          ctx.arc(px + size / 2, py + size / 2, size / 2, 0, Math.PI * 2);
+        } else if (s.cropShape === 'rounded') {
+          ctx.roundRect ? ctx.roundRect(px, py, size, size, 32) : ctx.rect(px, py, size, size);
+        } else {
+          ctx.rect(px, py, size, size);
+        }
+        ctx.clip();
+        const zoom = +s.imgZoom || 1;
+        const drawSize = size * zoom;
+        const offset = (drawSize - size) / 2;
+        ctx.drawImage(img, px - offset, py - offset, drawSize, drawSize);
+        ctx.restore();
+        drawTextContent();
+      };
+      img.onerror = () => drawTextContent();
+      img.src = photoSrc;
+    } else {
+      drawTextContent();
+    }
+  });
+}
+
+function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = String(text || '').split(' ');
+  let line = '';
+  let curY = y;
+  for (let n = 0; n < words.length; n++) {
+    const testLine = line + words[n] + ' ';
+    if (ctx.measureText(testLine).width > maxWidth && n > 0) {
+      ctx.fillText(line.trim(), x, curY);
+      line = words[n] + ' ';
+      curY += lineHeight;
+    } else {
+      line = testLine;
+    }
+  }
+  if (line.trim()) ctx.fillText(line.trim(), x, curY);
+}
+
+async function exportSocialAsset(format = 'png') {
+  const tpl = getSocialActiveTpl();
+  const s = window.SOCIAL_STUDIO;
+  if (tpl.slides > 1) {
+    for (let i = 0; i < tpl.slides; i++) {
+      const dataUrl = await renderSocialCanvasSlide(tpl, i, format);
+      triggerSocialDownload(dataUrl, `${tpl.id}_slide_${i + 1}.${format}`);
+    }
+    toast(`Exported all ${tpl.slides} carousel slides as ${format.toUpperCase()}`);
+  } else {
+    const dataUrl = await renderSocialCanvasSlide(tpl, 0, format);
+    triggerSocialDownload(dataUrl, `${tpl.id}_${Date.now()}.${format}`);
+    toast(`Downloaded high-res ${format.toUpperCase()} (${tpl.w}x${tpl.h})`);
+  }
+}
+
+function triggerSocialDownload(dataUrl, filename) {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function renderSocialPreviewCol() {
+  const s = window.SOCIAL_STUDIO;
+  const tpl = getSocialActiveTpl();
+  const th = SOCIAL_THEMES[s.theme] || SOCIAL_THEMES.blue;
+  const students = (D.users || []).filter(u => u.role === 'student');
+  const photoUrl = s.photo || av(U(s.studentId) || students[0]);
+  const inst = D.inst || 'trigrexam';
+  const isLand = tpl.w > tpl.h;
+  const cropRadius = s.cropShape === 'circle' ? '50%' : s.cropShape === 'rounded' ? '16px' : '4px';
+
+  return `
+    <div class="ss-card">
+      <div class="ss-card-top">
+        <span>Live Preview · ${E(tpl.name)} (${tpl.w}x${tpl.h})</span>
+        ${tpl.slides > 1 ? `
+          <div class="ss-slide-pills">
+            ${Array.from({ length: tpl.slides }, (_, idx) => `
+              <button type="button" class="ss-slide-pill ${s.slideIdx === idx ? 'active' : ''}" onclick="window.SOCIAL_STUDIO.slideIdx=${idx};refreshSocialPreviewOnly()">Slide ${idx + 1}</button>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+
+      <div class="ss-canvas-stage">
+        <div class="ss-artboard ${isLand ? 'land' : ''}" style="aspect-ratio:${tpl.ratio};background:${th.grad};color:${th.ink};border-color:${th.border}">
+          <div class="ss-art-head">
+            <span class="ss-art-brand" style="color:${th.accent}">${E(inst)}</span>
+            <span class="ss-art-badge" style="background:${th.cardBg};color:${th.accent};border:1px solid ${th.border}">
+              ${s.slideIdx === 1 ? 'Score Breakdown' : s.slideIdx === 2 ? 'Admissions Open' : E(s.badge)}
+            </span>
+          </div>
+
+          ${s.slideIdx === 1 ? `
+            <div class="ss-art-body center">
+              <div class="ss-art-name">${E(s.name)}</div>
+              <div class="ss-art-sub" style="color:${th.mute}">${E(s.subtext)}</div>
+              <div class="ss-art-metric" style="color:${th.accent}">${E(s.metricValue)}</div>
+              <div class="ss-art-sub" style="color:${th.mute}">${E(s.metricLabel)}</div>
+            </div>
+          ` : s.slideIdx === 2 ? `
+            <div class="ss-art-body center">
+              <div class="ss-art-headline">Admissions Open for New Batches</div>
+              <div class="ss-art-sub" style="color:${th.mute}">Structured CBT mock tests, live mentorship, and detailed analytics at ${E(inst)}.</div>
+            </div>
+          ` : `
+            <div class="ss-art-body ${isLand ? 'row' : 'col'}">
+              <div class="ss-photo-frame" style="border-radius:${cropRadius};border-color:${th.accent}">
+                <img src="${photoUrl}" alt="${E(s.name)}" style="transform:scale(${s.imgZoom})">
+              </div>
+              <div class="ss-art-copy">
+                <div class="ss-art-headline">${E(s.headline)}</div>
+                <div class="ss-art-metric-line" style="color:${th.accent}">${E(s.metricValue)} · ${E(s.metricLabel)}</div>
+                ${s.templateId.includes('quote') ? `<div class="ss-art-quote" style="color:${th.mute}">"${E(s.quote)}"</div>` : ''}
+                <div class="ss-art-name">${E(s.name)}</div>
+                <div class="ss-art-sub" style="color:${th.mute}">${E(s.subtext)}</div>
+              </div>
+            </div>
+          `}
+
+          <div class="ss-art-footer" style="background:${th.cardBg};border-top:1px solid ${th.border}">
+            <span>Admissions Open · ${E(inst)}</span>
+            <span style="color:${th.accent}">Enroll Now</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ss-export-bar">
+        <button type="button" class="b2" onclick="exportSocialAsset('jpg')">Download JPG</button>
+        <button type="button" class="b1" onclick="exportSocialAsset('png')">${tpl.slides > 1 ? `Download All ${tpl.slides} Slides (PNG)` : 'Download PNG'}</button>
+      </div>
+    </div>
+
+    <!-- Matching Caption Box -->
+    <div class="ss-card">
+      <div class="ss-card-top">
+        <span>Matching Caption</span>
+        <button type="button" class="b2" style="padding:4px 10px;font-size:12px" onclick="copySocialCaption()">Copy Caption</button>
+      </div>
+      <textarea class="in ss-caption-box" rows="5" readonly>${E(buildSocialCaption())}</textarea>
+    </div>
+  `;
+}
+
+function refreshSocialPreviewOnly() {
+  const el = $('#ssPreviewCol');
+  if (el) el.innerHTML = renderSocialPreviewCol();
+  const zLbl = $('#ssZoomLbl');
+  if (zLbl) zLbl.textContent = `Zoom (${Number(window.SOCIAL_STUDIO.imgZoom).toFixed(1)}x)`;
+}
+
+PG.social_studio = function () {
+  const s = window.SOCIAL_STUDIO;
+  const students = (D.users || []).filter(u => u.role === 'student');
+  const templates = SOCIAL_TEMPLATES[s.platform] || SOCIAL_TEMPLATES.instagram;
+
+  return `
+    <div class="ss-shell">
+      <div class="ss-header">
+        <div>
+          <h1>Social Studio</h1>
+          <p>Template-first branded graphics for Instagram, LinkedIn, and WhatsApp with one-click student auto-fill and instant export.</p>
+        </div>
+        <div class="ss-platform-tabs">
+          ${[
+            ['instagram', 'Instagram'],
+            ['linkedin', 'LinkedIn'],
+            ['whatsapp', 'WhatsApp']
+          ].map(([k, lbl]) => `
+            <button type="button" class="ss-ptab ${s.platform === k ? 'active' : ''}" onclick="setSocialPlatform('${k}')">${lbl}</button>
+          `).join('')}
+        </div>
+      </div>
+
+      <!-- Horizontal Template Gallery -->
+      <div class="ss-gallery">
+        ${templates.map(t => `
+          <div class="ss-tpl-card ${s.templateId === t.id ? 'active' : ''}" onclick="setSocialTemplate('${t.id}')">
+            <div class="ss-tpl-name">${E(t.name)}</div>
+            <div class="ss-tpl-desc">${E(t.desc)}</div>
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- Side-by-Side Live Preview & Quick-Fill Editor -->
+      <div class="ss-workspace">
+        <!-- Left: Live Preview + Export + Caption -->
+        <div class="ss-preview-col" id="ssPreviewCol">
+          ${renderSocialPreviewCol()}
+        </div>
+
+        <!-- Right: Quick-Fill Content & Image Editor -->
+        <div class="ss-editor-col">
+          <div class="ss-card">
+            <div class="ss-card-top"><span>Quick-Fill Content</span></div>
+
+            <div class="ss-form">
+              <label>One-Click Student Auto-Fill
+                <select class="in" onchange="autoFillSocialStudent(this.value)">
+                  <option value="">-- Pick a student to auto-fill --</option>
+                  ${students.map(st => `<option value="${st.id}" ${s.studentId === st.id ? 'selected' : ''}>${E(st.name)} (${E(st.email)})</option>`).join('')}
+                </select>
+              </label>
+
+              <label>Color Theme
+                <div class="ss-theme-row">
+                  ${Object.entries(SOCIAL_THEMES).map(([tk, tv]) => `
+                    <button type="button" class="ss-theme-btn ${s.theme === tk ? 'active' : ''}" onclick="window.SOCIAL_STUDIO.theme='${tk}';rp()">
+                      <span class="ss-swatch" style="background:${tv.bg}"></span>
+                      <span>${tv.label}</span>
+                    </button>
+                  `).join('')}
+                </div>
+              </label>
+
+              <div class="g2" style="gap:10px">
+                <label>Badge Label
+                  <input class="in" value="${E(s.badge)}" oninput="window.SOCIAL_STUDIO.badge=this.value;refreshSocialPreviewOnly()">
+                </label>
+                <label>Student / Batch Name
+                  <input class="in" value="${E(s.name)}" oninput="window.SOCIAL_STUDIO.name=this.value;refreshSocialPreviewOnly()">
+                </label>
+              </div>
+
+              <label>Headline
+                <input class="in" value="${E(s.headline)}" oninput="window.SOCIAL_STUDIO.headline=this.value;refreshSocialPreviewOnly()">
+              </label>
+
+              <div class="g2" style="gap:10px">
+                <label>Score / Metric
+                  <input class="in" value="${E(s.metricValue)}" oninput="window.SOCIAL_STUDIO.metricValue=this.value;refreshSocialPreviewOnly()">
+                </label>
+                <label>Metric Label
+                  <input class="in" value="${E(s.metricLabel)}" oninput="window.SOCIAL_STUDIO.metricLabel=this.value;refreshSocialPreviewOnly()">
+                </label>
+              </div>
+
+              <label>Batch / Subtitle
+                <input class="in" value="${E(s.subtext)}" oninput="window.SOCIAL_STUDIO.subtext=this.value;refreshSocialPreviewOnly()">
+              </label>
+
+              <label>Quote / Highlight Text
+                <textarea class="in" rows="2" oninput="window.SOCIAL_STUDIO.quote=this.value;refreshSocialPreviewOnly()">${E(s.quote)}</textarea>
+              </label>
+
+              <!-- Drag & Drop Image Upload + Cropper -->
+              <div class="ss-crop-box">
+                <div class="ss-crop-head">
+                  <span>Photo Upload & Cropper</span>
+                  <div class="ss-crop-shapes">
+                    ${['circle', 'rounded', 'square'].map(sh => `
+                      <button type="button" class="ss-shape-btn ${s.cropShape === sh ? 'active' : ''}" onclick="window.SOCIAL_STUDIO.cropShape='${sh}';rp()">${sh}</button>
+                    `).join('')}
+                  </div>
+                </div>
+
+                <label class="ss-dropzone" ondragover="event.preventDefault()" ondrop="event.preventDefault();handleSocialPhotoUpload(event.dataTransfer.files[0])">
+                  <span>Drop an image here or click to upload</span>
+                  <input type="file" accept="image/*" hidden onchange="handleSocialPhotoUpload(this.files[0])">
+                </label>
+
+                <label style="margin-top:8px"><span id="ssZoomLbl">Zoom (${Number(s.imgZoom).toFixed(1)}x)</span>
+                  <input type="range" min="1" max="1.8" step="0.1" value="${s.imgZoom}" oninput="window.SOCIAL_STUDIO.imgZoom=this.value;refreshSocialPreviewOnly()">
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+};
